@@ -18,8 +18,14 @@ async function createTask(page: Page, title: string, assigneeLabel?: string) {
   const dialog = page.getByRole('dialog', { name: '新建任务', exact: true });
   await dialog.getByLabel('任务标题', { exact: false }).fill(title);
   await dialog.getByLabel('任务说明', { exact: false }).fill('浏览器验收记录：完成后整理到本月总结。');
-  await dialog.getByLabel('截止日期', { exact: true }).fill(addDays(localDate(), 1));
-  if (assigneeLabel) await dialog.getByLabel('负责人', { exact: true }).selectOption({ label: assigneeLabel });
+  await dialog.getByLabel('截止日期', { exact: true }).click();
+  await dialog.getByRole('dialog', { name: '选择截止日期', exact: true }).getByRole('button', { name: '明天', exact: true }).click();
+  if (assigneeLabel) {
+    // Assign the task to someone else instead of the default (the creator).
+    const owners = dialog.getByRole('group', { name: '负责人' });
+    await owners.getByRole('checkbox', { checked: true }).uncheck();
+    await owners.getByRole('checkbox', { name: assigneeLabel, exact: true }).check();
+  }
   const saved = page.waitForResponse(response => response.url().endsWith('/api/tasks') && response.request().method() === 'POST');
   await dialog.getByRole('button', { name: '创建任务', exact: true }).click();
   const response = await saved;
@@ -120,6 +126,18 @@ test('创建者与接收人能访问，无关成员不能通过页面或 API 获
     await expect(bob.getByRole('row').filter({ hasText: task.title })).toBeVisible();
     await bob.getByRole('button', { name: /^通知/ }).click();
     await expect(bob.getByRole('region', { name: '站内通知' }).getByText(task.title, { exact: true })).toBeVisible();
+    await bob.keyboard.press('Escape');
+    // Assignees can move the status forward but cannot edit or archive the task.
+    const bobRow = bob.getByRole('row').filter({ hasText: task.title });
+    await bobRow.getByRole('button', { name: `完成「${task.title}」`, exact: true }).click();
+    await expect(bobRow.getByLabel(`更新「${task.title}」状态`, { exact: true })).toHaveValue('done');
+    await bobRow.locator('.task-title-button').click();
+    const detail = bob.getByRole('dialog', { name: '任务详情', exact: true });
+    await expect(detail.getByLabel('任务标题', { exact: false })).not.toBeEditable();
+    await expect(detail.getByRole('checkbox', { name: '陈一然（我）', exact: true })).toBeDisabled();
+    await expect(detail.getByRole('button', { name: '归档', exact: true })).toHaveCount(0);
+    await bob.keyboard.press('Escape');
+    await expect(detail).toHaveCount(0);
     const carol = await carolContext.newPage();
     await login(carol, 'zhou');
     expect((await carol.request.get(`/api/tasks/${task.id}`)).status()).toBe(404);
@@ -158,7 +176,7 @@ test('看板三种状态可拖入归档图标，松手直接归档并可恢复',
   const tasks: Task[] = [];
   for (const status of ['todo', 'in_progress', 'done'] as const) {
     let task = (await (await context.request.post('/api/tasks', { data: {
-      title: `拖放归档验收：${status}`, description: '归档保留说明、截止日期和状态', assigneeId: user.id, dueDate: localDate(),
+      title: `拖放归档验收：${status}`, description: '归档保留说明、截止日期和状态', assigneeIds: [user.id], dueDate: localDate(),
     } })).json()).task as Task;
     if (status !== 'todo') task = (await (await context.request.patch(`/api/tasks/${task.id}`, { data: { version: task.version, status } })).json()).task;
     tasks.push(task);
@@ -351,8 +369,8 @@ test('管理员创建成员、首次改密、停用并转交任务', async ({ pa
     await deactivate.getByRole('button', { name: '确认停用' }).click();
     await expect(deactivate).not.toBeVisible();
     await expect(page.getByRole('row').filter({ hasText: '验收成员' })).toContainText('已停用');
-    const moved = (await (await page.request.get(`/api/tasks/${task.id}`)).json()).task;
-    expect(moved.assignee.displayName).toBe('陈一然');
+    const moved = (await (await page.request.get(`/api/tasks/${task.id}`)).json()).task as Task;
+    expect(moved.assignees.map(member => member.displayName)).toEqual(['陈一然']);
     await member.reload();
     await expect(member.getByRole('heading', { name: '欢迎回来' })).toBeVisible();
   } finally { await memberContext.close(); }
@@ -443,93 +461,72 @@ test('探索入口支持键盘跳转、角色区分，并保留正在编辑的�
   } finally { await adminContext.close(); }
 });
 
-for (const style of ['business', 'minimal', 'tech']) {
-  for (const scheme of ['light', 'dark'] as const) {
-    test(`登录预览 ${style} / ${scheme} 的桌面、手机与无障碍表现`, async ({ page }, testInfo) => {
-      const errors: string[] = [];
-      page.on('pageerror', error => errors.push(error.message));
-      page.on('console', message => { if (message.type() === 'error' && /Content Security Policy/i.test(message.text())) errors.push(message.text()); });
-      await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
-      await page.goto(`/login-preview?style=${style}`);
-      await expect(page.getByRole('heading', { name: '欢迎回来', exact: true })).toBeVisible();
-      await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
-      await expect(page.locator('.login-screen')).toHaveAttribute('data-login-style', style);
-      await expect(page.getByLabel('用户名', { exact: true })).toBeEditable();
-      for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
-        await page.setViewportSize({ width, height });
-        await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await page.screenshot({ path: testInfo.outputPath(`login-${style}-${scheme}-${device}.png`), fullPage: true });
-        const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
-        expect(result.violations).toEqual([]);
-      }
-      await page.setViewportSize({ width: 320, height: 740 });
+for (const scheme of ['light', 'dark'] as const) {
+  test(`登录页 ${scheme} 的桌面、手机与无障碍表现`, async ({ page }, testInfo) => {
+    const errors: string[] = [];
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('console', message => { if (message.type() === 'error' && /Content Security Policy/i.test(message.text())) errors.push(message.text()); });
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: '欢迎回来', exact: true })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', scheme);
+    await expect(page.getByLabel('用户名', { exact: true })).toBeEditable();
+    for (const [device, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
+      await page.setViewportSize({ width, height });
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-      const brand = await page.locator('.login-brandbar').boundingBox();
-      const theme = await page.locator('.login-theme').boundingBox();
-      expect(brand!.x + brand!.width).toBeLessThan(theme!.x);
-      expect(errors).toEqual([]);
-    });
-  }
+      await page.screenshot({ path: testInfo.outputPath(`login-${scheme}-${device}.png`), fullPage: true });
+      const result = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa']).analyze();
+      expect(result.violations).toEqual([]);
+    }
+    await page.setViewportSize({ width: 320, height: 740 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const brand = await page.locator('.login-brandbar').boundingBox();
+    const theme = await page.locator('.login-theme').boundingBox();
+    expect(brand!.x + brand!.width).toBeLessThan(theme!.x);
+    expect(errors).toEqual([]);
+  });
 }
 
-test('液态玻璃响应鼠标移动，交互不影响输入，并遵守减少动态效果设置', async ({ page }) => {
+test('登录页视差只跟随鼠标并遵守减少动态效果，错误提示与输入保持不变', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/login-preview?style=minimal');
-  await page.getByLabel('用户名', { exact: true }).fill('draft-user');
-  await page.getByLabel('密码', { exact: true }).fill('still-editing');
-  const layout = page.locator('.login-layout');
-  const water = page.locator('.liquid-water');
-  await expect(water).toBeVisible();
-  await expect(page.locator('.liquid-glass-refraction')).toHaveCount(1);
-  await page.mouse.move(100, 400, { steps: 8 });
-  const firstLight = await layout.evaluate(element => element.style.getPropertyValue('--glass-light-x'));
-  await page.mouse.move(1280, 640, { steps: 15 });
-  await expect.poll(() => layout.evaluate(element => element.style.getPropertyValue('--glass-light-x'))).not.toBe(firstLight);
-  await page.mouse.click(1250, 450);
-  await expect(page.getByLabel('用户名', { exact: true })).toHaveValue('draft-user');
-  await expect(page.getByLabel('密码', { exact: true })).toHaveValue('still-editing');
-  await page.getByRole('button', { name: '显示密码', exact: true }).click();
-  await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  await expect.poll(() => layout.evaluate(element => element.style.getPropertyValue('--scene-x'))).toBe('');
-  const still = await water.evaluate((element: HTMLCanvasElement) => element.toDataURL());
-  await page.mouse.move(150, 300, { steps: 10 });
-  await page.mouse.click(150, 300);
-  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))));
-  expect(await water.evaluate((element: HTMLCanvasElement) => element.toDataURL())).toBe(still);
-  await expect(page.getByLabel('用户名', { exact: true })).toHaveValue('draft-user');
-  await page.getByRole('navigation', { name: '登录页风格' }).getByRole('button', { name: '商务', exact: true }).click();
-  await expect(water).toHaveCount(0);
-  await page.getByRole('navigation', { name: '登录页风格' }).getByRole('button', { name: '简约', exact: true }).click();
-  await expect(water).toBeVisible();
-  await expect(page.getByLabel('用户名', { exact: true })).toHaveValue('draft-user');
-});
-
-test('切换登录风格保留输入和错误，预览支持真实登录并保护已登录会话', async ({ page, context }) => {
-  await page.goto('/login-preview?style=business');
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto('/');
+  const screen = page.locator('.login-screen');
+  const parallax = () => screen.evaluate((element: HTMLElement) => element.style.getPropertyValue('--px'));
+  await expect(page.locator('.login-stack')).toBeVisible();
+  // Entrance motion is one-time only; nothing on the login page loops forever.
+  expect(await page.evaluate(() => document.getAnimations().some(animation => animation.effect?.getTiming().iterations === Infinity))).toBe(false);
   await page.getByLabel('用户名', { exact: true }).fill('lin');
   await page.getByLabel('密码', { exact: true }).fill('wrong-password');
+  await page.mouse.move(200, 300, { steps: 5 });
+  await expect.poll(parallax).not.toBe('');
+  const first = await parallax();
+  await page.mouse.move(1200, 700, { steps: 10 });
+  await expect.poll(parallax).not.toBe(first);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(parallax).toBe('');
+  await page.mouse.move(300, 400, { steps: 10 });
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  expect(await parallax()).toBe('');
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('用户名或密码');
+  await expect(page.getByLabel('用户名', { exact: true })).toHaveValue('lin');
   await page.getByRole('button', { name: '显示密码', exact: true }).click();
-  for (const label of ['简约', '科技', '商务']) {
-    await page.getByRole('navigation', { name: '登录页风格' }).getByRole('button', { name: label, exact: true }).click();
-    await expect(page.getByLabel('用户名', { exact: true })).toHaveValue('lin');
-    await expect(page.getByLabel('密码', { exact: true })).toHaveValue('wrong-password');
-    await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
-    await expect(page.getByRole('alert')).toContainText('用户名或密码');
-  }
+  await expect(page.getByLabel('密码', { exact: true })).toHaveAttribute('type', 'text');
   await page.getByLabel('密码', { exact: true }).fill(password);
   await page.getByRole('button', { name: '登录', exact: true }).click();
-  await expect(page).toHaveURL(/\/tasks$/);
-  const before = (await (await context.request.get('/api/auth/me')).json()).user;
-  await page.goto('/login-preview?style=tech');
-  await expect(page.getByLabel('用户名', { exact: true })).toBeDisabled();
-  await page.getByRole('navigation', { name: '登录页风格' }).getByRole('button', { name: '简约', exact: true }).click();
-  await page.getByRole('button', { name: '进入工作空间', exact: true }).click();
   await expect(page.getByRole('heading', { name: '我的任务', exact: true })).toBeVisible();
-  expect((await (await context.request.get('/api/auth/me')).json()).user.id).toBe(before.id);
+});
+
+test('旧的登录预览地址回到正式登录页或工作空间', async ({ page }) => {
+  await page.goto('/login-preview?style=tech');
+  await expect(page.getByRole('heading', { name: '欢迎回来', exact: true })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: '登录页风格' })).toHaveCount(0);
+  await login(page);
+  await page.goto('/login-preview');
+  await expect(page).toHaveURL(/\/tasks$/);
+  await expect(page.getByRole('heading', { name: '我的任务', exact: true })).toBeVisible();
 });
 
 test('主题跟随系统、保存手动设置，并覆盖全部页面、弹窗和其他标签页', async ({ page, context }, testInfo) => {
@@ -598,7 +595,7 @@ test('范围日历选完即筛选，支持单日、跨月、反向选择及取�
     ['之前', '2026-10-30', 'todo'], ['开始', '2026-10-31', 'in_progress'],
     ['结束', '2026-11-01', 'done'], ['之后', '2026-11-02', 'todo'], ['无日期', null, 'todo'],
   ]) {
-    const result = await context.request.post('/api/tasks', { data: { title: `日期验收：${title}`, assigneeId: user.id, dueDate } });
+    const result = await context.request.post('/api/tasks', { data: { title: `日期验收：${title}`, assigneeIds: [user.id], dueDate } });
     expect(result.status()).toBe(201);
     if (status !== 'todo') {
       const task = (await result.json()).task as Task;
@@ -662,7 +659,7 @@ test('今天、本周、本月及原有快捷日期互斥，范围边界与任�
   const user = (await (await context.request.get('/api/auth/me')).json()).user;
   const dates: (string | null)[] = [...new Set([today, week.dueFrom, week.dueTo, addDays(week.dueFrom, -1), addDays(week.dueTo, 1), month.dueFrom, month.dueTo, addDays(month.dueFrom, -1), addDays(month.dueTo, 1)]), null];
   for (const dueDate of dates) {
-    expect((await context.request.post('/api/tasks', { data: { title: `快捷日期验收：${dueDate || '无日期'}`, assigneeId: user.id, dueDate } })).status()).toBe(201);
+    expect((await context.request.post('/api/tasks', { data: { title: `快捷日期验收：${dueDate || '无日期'}`, assigneeIds: [user.id], dueDate } })).status()).toBe(201);
   }
   await page.getByRole('textbox', { name: '搜索任务', exact: true }).fill('快捷日期验收');
   const rows = page.getByRole('row').filter({ hasText: '快捷日期验收' });

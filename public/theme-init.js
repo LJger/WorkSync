@@ -1,5 +1,5 @@
 // A same-origin, blocking script applies the saved appearance before CSS paints.
-// Keep the preference key and colors aligned with client/theme.tsx.
+// Keep the preference key and colors aligned with client/theme.tsx and client/styles/tokens.css.
 (() => {
   let preference = 'system';
   try {
@@ -11,5 +11,5 @@
     : preference;
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#101b27' : '#f5f8fc');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0c1117' : '#eef1f4');
 })();

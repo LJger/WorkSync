@@ -162,7 +162,7 @@ describe('身份、会话与权限', () => {
 });
 
 describe('任务分配、隔离与并发', () => {
-  it('创建者可编辑，负责人只读，无关成员不能读取、修改或聚合查询', async () => {
+  it('创建者可编辑，负责人只能更新状态，无关成员不能读取、修改或聚合查询', async () => {
     const created = await as(alice, 'POST', '/api/tasks', { title: '私有协作任务', description: '说明不会消失', assigneeIds: [bob.id], dueDate: '2026-10-16' });
     expect(created.statusCode).toBe(201);
     const task = created.json().task as Task;
@@ -176,8 +176,10 @@ describe('任务分配、隔离与并发', () => {
     expect((await as(carol, 'GET', '/api/tasks?scope=all')).statusCode).toBe(403);
     expect((await as(carol, 'GET', '/api/tasks/summary?scope=all')).statusCode).toBe(403);
     expect((await as(admin, 'GET', '/api/tasks?scope=all')).json().total).toBe(1);
-    expect((await as(bob, 'PATCH', `/api/tasks/${task.id}`, { version: 1, status: 'in_progress' })).statusCode).toBe(403);
-    const changed = await as(alice, 'PATCH', `/api/tasks/${task.id}`, { version: 1, status: 'in_progress' });
+    expect((await as(bob, 'PATCH', `/api/tasks/${task.id}`, { version: 1, title: '越权' })).statusCode).toBe(403);
+    expect((await as(bob, 'PATCH', `/api/tasks/${task.id}`, { version: 1, status: 'in_progress', dueDate: null })).statusCode).toBe(403);
+    expect((await as(bob, 'POST', `/api/tasks/${task.id}/archive`, { version: 1, archived: true })).statusCode).toBe(403);
+    const changed = await as(bob, 'PATCH', `/api/tasks/${task.id}`, { version: 1, status: 'in_progress' });
     expect(changed.statusCode).toBe(200);
     expect(changed.json().task.description).toBe('说明不会消失');
     expect(changed.json().task.dueDate).toBe('2026-10-16');

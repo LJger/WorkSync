@@ -1,0 +1,910 @@
+/* Dialogs use the native top layer; drawers float inset from the edge. */
+.modal {
+  width: 500px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-2xl);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--elev-4), inset 0 1px 0 var(--glass-highlight);
+  animation: modal-enter var(--dur-slow) var(--ease-spring);
+}
+
+.modal::backdrop {
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.modal-shell {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 50px);
+}
+
+@keyframes modal-enter {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.drawer {
+  position: fixed;
+  top: var(--shell-gap);
+  right: var(--shell-gap);
+  bottom: var(--shell-gap);
+  left: auto;
+  width: 560px;
+  max-width: calc(100vw - var(--shell-gap) * 2);
+  height: auto;
+  max-height: none;
+  margin: 0;
+  animation: drawer-enter var(--dur-slow) var(--ease-out);
+}
+
+.drawer .modal-shell {
+  height: 100%;
+  max-height: 100%;
+}
+
+@keyframes drawer-enter {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+
+.modal-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 24px 24px 18px 28px;
+}
+
+.modal-header h2 {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -.01em;
+  overflow-wrap: anywhere;
+}
+
+.modal-header p {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.modal-header .icon-button {
+  margin: -4px -6px 0 0;
+  border-radius: 50%;
+}
+
+.modal-form {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.modal-body {
+  min-height: 0;
+  padding: 4px 28px 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+
+.footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-modal {
+  width: 440px;
+}
+
+.confirm-modal .modal-body {
+  padding-bottom: 28px;
+}
+
+.confirm-message, .helper-text {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.9;
+  white-space: pre-line;
+}
+
+.copy-fallback {
+  height: 280px;
+  margin-top: 16px;
+  font-size: var(--text-sm);
+  line-height: 1.85;
+}
+
+/* Toasts */
+.toast-stack {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: var(--z-toast);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(540px, calc(100vw - 32px));
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-3);
+  color: var(--success);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  box-shadow: var(--elev-3), inset 0 1px 0 var(--glass-highlight);
+  -webkit-backdrop-filter: var(--blur-glass);
+  backdrop-filter: var(--blur-glass);
+  pointer-events: auto;
+  animation: toast-enter var(--dur-slow) var(--ease-spring);
+}
+
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: none; }
+}
+
+.toast > span {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.toast-error {
+  border-color: var(--danger-border);
+  color: var(--danger);
+}
+
+.toast-info {
+  color: var(--accent-deep);
+}
+
+.toast .icon-button {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  margin-left: 2px;
+  border-radius: 50%;
+}
+
+.toast-action {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent-light);
+  color: var(--accent-deep);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toast-action:hover {
+  background: var(--accent-border);
+}
+
+/* Explorer (Ctrl/⌘ K). Animations here must be finite: tests wait for them. */
+.explorer {
+  --explorer-top: clamp(40px, 13dvh, 140px);
+  position: fixed;
+  top: var(--explorer-top);
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: 640px;
+  max-height: calc(100dvh - var(--explorer-top) - 20px);
+  margin: 0 auto;
+  border-radius: 28px;
+  background: var(--glass-3);
+  -webkit-backdrop-filter: var(--blur-glass);
+  backdrop-filter: var(--blur-glass);
+}
+
+.explorer .modal-shell {
+  max-height: calc(100dvh - var(--explorer-top) - 20px);
+}
+
+.explorer::backdrop {
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.explorer .modal-header {
+  padding: 22px 22px 14px 26px;
+}
+
+.explorer .modal-header h2 {
+  font-size: var(--text-lg);
+}
+
+.explorer-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 0 14px 12px;
+  overflow: hidden;
+}
+
+.explorer-search {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  margin: 0 6px;
+  padding: 0 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 0 0 4px var(--focus-ring), var(--elev-1);
+}
+
+.explorer-search input {
+  flex: 1;
+  width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--text-md);
+  box-shadow: none;
+}
+
+.explorer-search input:focus {
+  box-shadow: none;
+}
+
+.explorer-caption {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  margin: 18px 12px 8px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.explorer-caption small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.explorer-list {
+  min-height: 0;
+  max-height: min(420px, 47dvh);
+  padding: 2px 4px 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.explorer-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 64px;
+  margin: 2px 0;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  text-align: left;
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-base);
+}
+
+.explorer-option[aria-selected="true"] {
+  border-color: var(--glass-border);
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+}
+
+.explorer-icon {
+  display: flex;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: var(--surface-hover);
+  color: var(--ink-soft);
+  transition: background-color var(--dur-fast), color var(--dur-fast), translate var(--dur-base) var(--ease-spring);
+}
+
+.explorer-icon-amber {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.explorer-icon-teal {
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+.explorer-option[aria-selected="true"] .explorer-icon {
+  background: var(--accent);
+  color: var(--on-accent);
+  translate: 0 -1px;
+}
+
+.explorer-option-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.explorer-option-copy strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.explorer-option-copy small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.6;
+}
+
+.explorer-option-hint {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.explorer-option-arrow {
+  color: var(--accent-deep);
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: transform var(--dur-base) var(--ease-spring), opacity var(--dur-fast);
+}
+
+.explorer-option[aria-selected="true"] .explorer-option-arrow {
+  opacity: 1;
+  transform: none;
+}
+
+.explorer-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 26px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.explorer-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.explorer-footer > span:last-child {
+  margin-left: auto;
+}
+
+.explorer-footer kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-xs);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+.explorer-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px 16px 44px;
+  color: var(--accent);
+}
+
+.explorer-empty strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+
+.explorer-empty span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* Date range calendar. No opacity or scale here: tests measure and audit it while it opens. */
+.task-date-filter {
+  min-width: 128px;
+  max-width: 268px;
+}
+
+.task-date-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  box-shadow: var(--elev-1);
+  transition: border-color var(--dur-fast), background-color var(--dur-fast);
+}
+
+.task-date-trigger > span {
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-date-trigger > svg {
+  flex: 0 0 auto;
+  color: var(--muted);
+}
+
+.task-date-trigger:hover, .task-date-trigger[aria-expanded="true"] {
+  border-color: var(--accent-border);
+}
+
+.task-date-trigger.is-filtered {
+  border-color: var(--accent-border);
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+.task-date-trigger.is-filtered > svg {
+  color: inherit;
+}
+
+.task-date-popover {
+  position: fixed;
+  z-index: var(--z-calendar);
+  width: 584px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  padding: 18px;
+  overflow-y: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  color: var(--ink-soft);
+  box-shadow: var(--elev-4), inset 0 1px 0 var(--glass-highlight);
+  animation: calendar-enter var(--dur-base) var(--ease-out);
+}
+
+@keyframes calendar-enter {
+  from { translate: 0 -4px; }
+}
+
+.task-date-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.task-date-heading strong {
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 600;
+}
+
+.task-date-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+
+.task-date-icon:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.task-date-shortcuts {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--lane);
+}
+
+.task-date-shortcuts button {
+  flex: 1;
+  height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  transition: background-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-base);
+}
+
+.task-date-shortcuts button:hover {
+  color: var(--ink);
+}
+
+.task-date-shortcuts button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--elev-2);
+}
+
+.task-date-calendar-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.task-date-calendars {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.task-date-month h3 {
+  margin: 2px 0 10px;
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+.task-date-month table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  font-size: var(--text-xs);
+}
+
+.task-date-month th {
+  height: 24px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.task-date-month td {
+  height: 34px;
+  padding: 0;
+  text-align: center;
+}
+
+.task-date-month td.in-range {
+  background: var(--accent-light);
+}
+
+.task-date-month td.range-start {
+  border-radius: var(--radius-pill) 0 0 var(--radius-pill);
+}
+
+.task-date-month td.range-end {
+  border-radius: 0 var(--radius-pill) var(--radius-pill) 0;
+}
+
+.task-date-month td.range-start.range-end {
+  border-radius: var(--radius-pill);
+}
+
+.task-date-month td > button {
+  position: relative;
+  width: 100%;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.task-date-month td > button:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.task-date-month td.in-range > button:hover {
+  background: var(--accent-border);
+}
+
+.task-date-month td > button[aria-current="date"]::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: calc(50% - 2px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.task-date-month td > button.range-edge {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+  box-shadow: 0 4px 10px -2px var(--accent-glow);
+}
+
+.task-date-month td > button.range-edge[aria-current="date"]::after {
+  background: var(--on-accent);
+}
+
+.task-date-month td > button:focus-visible {
+  z-index: 1;
+  outline-offset: 1px;
+}
+
+.task-date-hint {
+  margin: 10px 0 12px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.task-date-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.task-date-footer > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.task-date-footer button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.task-date-footer button:hover, .task-date-footer button[aria-pressed="true"] {
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+.task-date-footer .task-date-clear {
+  color: var(--accent-deep);
+  white-space: nowrap;
+}
+
+/* Single-date picker used in forms: the trigger looks like a text input. */
+.date-picker {
+  min-width: 0;
+}
+
+.date-picker-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: var(--control-height);
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: var(--text-base);
+  text-align: left;
+  transition: border-color var(--dur-fast), box-shadow var(--dur-fast);
+}
+
+.date-picker-trigger > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-picker-trigger.has-value {
+  color: var(--ink);
+}
+
+.date-picker-trigger > svg {
+  color: var(--muted);
+}
+
+.date-picker-trigger:hover:not(:disabled) {
+  border-color: var(--accent-border);
+}
+
+.date-picker-trigger[aria-expanded="true"] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--focus-ring);
+}
+
+.date-picker-trigger:disabled {
+  background: var(--surface-subtle);
+  opacity: 1;
+}
+
+.date-picker-popover {
+  width: 320px;
+}
+
+.date-picker-popover .task-date-calendar-nav {
+  margin: 14px 0 6px;
+}
+
+.date-picker-popover .task-date-calendar-nav strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.date-picker-popover .task-date-footer {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.date-picker-popover .task-date-clear:disabled {
+  background: transparent;
+}
+
+@media (forced-colors: active) {
+  .task-date-month td > button.range-edge,
+  .task-date-shortcuts button[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+  }
+}
+
+@media (max-width: 1000px) {
+  .explorer-trigger kbd {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .modal {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 24px);
+    border-radius: var(--radius-xl);
+  }
+  .modal-shell {
+    max-height: calc(100dvh - 26px);
+  }
+  .drawer {
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    max-width: calc(100vw - 16px);
+  }
+  .modal-header {
+    padding: 20px 18px 14px 20px;
+  }
+  .modal-body {
+    padding: 4px 20px 20px;
+  }
+  .modal-footer {
+    padding: 14px 20px;
+  }
+  .toast-stack {
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 12px;
+    align-items: stretch;
+  }
+  .toast {
+    font-size: var(--text-xs);
+  }
+  .toast > span {
+    flex: 1;
+  }
+  .explorer .modal-header {
+    padding: 20px 18px 14px 20px;
+  }
+  .explorer-body {
+    padding: 0 10px 10px;
+  }
+  .explorer-search {
+    height: 46px;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .explorer-option {
+    gap: 10px;
+    padding: 10px 8px;
+  }
+  .explorer-option-hint {
+    display: none;
+  }
+  .explorer-icon {
+    flex-basis: 36px;
+    width: 36px;
+    height: 36px;
+  }
+  .explorer-footer {
+    gap: 10px;
+    padding: 12px 18px;
+  }
+  .task-date-filter {
+    flex: 1 1 128px;
+    min-width: 0;
+    max-width: none;
+  }
+  .task-date-trigger {
+    height: 36px;
+  }
+  .task-date-popover {
+    width: 350px;
+    padding: 14px;
+  }
+  .task-date-calendars {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .task-date-month td, .task-date-month td > button {
+    height: 36px;
+  }
+  .task-date-footer {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+}

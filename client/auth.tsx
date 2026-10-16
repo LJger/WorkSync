@@ -32,8 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }}>{children}</AuthContext.Provider>;
 }
 
-export function Brand({ light = false }: { light?: boolean }) {
-  return <span className={`brand ${light ? 'brand-light' : ''}`}><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="12" /><path d="m9 12 5 17 6-11 6 11 5-17" /></svg><span>WorkSync<span className="brand-dot">.</span></span></span>;
+export function Brand() {
+  return <span className="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><rect width="40" height="40" rx="12" /><path d="m9 12 5 17 6-11 6 11 5-17" /></svg><span>WorkSync<span className="brand-dot">.</span></span></span>;
 }
 
 export function PasswordInput({ value, onChange, label = '密码', autoComplete = 'current-password', minLength = 8, autoFocus = false, disabled = false, required = true, placeholder, id, 'aria-labelledby': labelledBy, 'aria-describedby': describedBy }: {
@@ -75,8 +75,9 @@ export function PasswordForm({ onDone, forced = false }: { onDone?: () => void; 
 export function ForcedPasswordPage() {
   const { logout } = useAuth();
   const { toast } = useUI();
-  return <main className="setup-page"><ThemeControl /><Brand /><section className="setup-panel"><div className="setup-heading"><KeyRound size={25} /><h1>设置你的新密码</h1></div>
-    <PasswordForm forced /><Button variant="ghost" onClick={() => void logout().catch(e => toast(String(e), 'error'))}>返回登录</Button></section></main>;
+  return <main className="setup-page"><header className="login-topbar"><Brand /><ThemeControl /></header>
+    <div className="setup-body"><section className="setup-panel"><div className="setup-heading"><KeyRound size={36} /><h1>设置你的新密码</h1></div>
+      <PasswordForm forced /><Button variant="ghost" onClick={() => void logout().catch(e => toast(String(e), 'error'))}>返回登录</Button></section></div></main>;
 }
 export function PasswordDialog({ onClose }: { onClose: () => void }) {
   return <Modal title="修改密码" onClose={onClose}><PasswordForm onDone={onClose} /></Modal>;

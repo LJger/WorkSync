@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Bell, CalendarDays, CheckCheck, ChevronDown, ChevronRight, CircleDot, Compass, FolderOpen, KeyRound, LayoutList, LogOut, Menu, TriangleAlert, Users, X } from 'lucide-react';
+import { ArrowRight, Bell, CalendarDays, CheckCheck, ChevronDown, CircleDot, FolderOpen, KeyRound, LayoutList, LogOut, Menu, Search, TriangleAlert, Users, X } from 'lucide-react';
 import type { Notification } from '../shared/types';
 import { formatDateTime, localDate } from '../shared/dates';
 import { api, errorMessage } from './api';
@@ -17,8 +17,6 @@ import { Explorer } from './Explorer';
 
 export function App() {
   const auth = useAuth();
-  const location = useLocation();
-  if (location.pathname === '/login-preview') return <LoginPage preview />;
   if (auth.loading) return <AuthLoading />;
   if (!auth.user && auth.error) return <main className="startup-loading"><Brand /><ErrorPanel error={auth.error} retry={auth.retry} /></main>;
   if (!auth.user) return <LoginPage />;
@@ -115,22 +113,22 @@ function Workspace() {
     return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
   }, []);
   const section = location.pathname.startsWith('/reports') ? '月度总结' : location.pathname.startsWith('/shared') ? '团队共享' : location.pathname.startsWith('/members') ? '团队管理' : '任务管理';
-  const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date(`${day}T12:00:00+08:00`));
+  const dateLabel = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'short' }).format(new Date(`${day}T12:00:00+08:00`));
   return <div className="app-layout">
     <a className="skip-link" href="#main-content">跳到主要内容</a>
     {mobileOpen && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMobileOpen(false)} />}
     <aside ref={sidebarRef} className={`sidebar ${mobileOpen ? 'sidebar-open' : ''}`} inert={mobile && !mobileOpen} role={mobile ? 'dialog' : undefined} aria-modal={mobile && mobileOpen ? true : undefined} aria-label={mobile ? '导航' : undefined}><div className="sidebar-brand"><Brand /><IconButton label="关闭导航" className="mobile-only" onClick={() => setMobileOpen(false)}><X size={19} /></IconButton></div>
-      <div className="workspace-label"><span className="workspace-monogram"><Users size={16} /></span><span>团队工作空间<small>一起把事情推进</small></span></div>
-      <nav className="main-nav" aria-label="主导航"><NavLink to="/tasks" onClick={() => setMobileOpen(false)}><LayoutList size={19} /><span>任务管理</span></NavLink>
-        <NavLink to="/reports" onClick={() => setMobileOpen(false)}><CalendarDays size={19} /><span>月度总结</span></NavLink><NavLink to="/shared" onClick={() => setMobileOpen(false)}><FolderOpen size={19} /><span>团队共享</span></NavLink>
-        {user!.role === 'admin' && <><div className="nav-divider" /><NavLink to="/members" onClick={() => setMobileOpen(false)}><Users size={19} /><span>团队管理</span></NavLink></>}
+      <p className="nav-caption">团队工作空间</p>
+      <nav className="main-nav" aria-label="主导航"><NavLink to="/tasks" onClick={() => setMobileOpen(false)}><LayoutList size={18} /><span>任务管理</span></NavLink>
+        <NavLink to="/reports" onClick={() => setMobileOpen(false)}><CalendarDays size={18} /><span>月度总结</span></NavLink><NavLink to="/shared" onClick={() => setMobileOpen(false)}><FolderOpen size={18} /><span>团队共享</span></NavLink>
+        {user!.role === 'admin' && <><div className="nav-divider" /><NavLink to="/members" onClick={() => setMobileOpen(false)}><Users size={18} /><span>团队管理</span></NavLink></>}
       </nav>
-      <div className="sidebar-bottom"><button className="sidebar-month" aria-label="回顾本月工作" onClick={() => navigate('/reports')}><span className="sidebar-month-icon"><CalendarDays size={19} /></span><span className="sidebar-month-copy"><strong>{Number(day.slice(5, 7))} 月工作回顾</strong><span>回顾本月的进展</span></span><ArrowRight size={16} /></button><p className="sidebar-caption">少一些遗漏，多一点从容。</p></div>
+      <div className="sidebar-bottom"><button className="sidebar-month" aria-label="回顾本月工作" onClick={() => navigate('/reports')}><span className="sidebar-month-icon"><CalendarDays size={18} /></span><span className="sidebar-month-copy"><strong>{Number(day.slice(5, 7))} 月工作回顾</strong><span>看看这个月的进展</span></span><ArrowRight size={16} /></button></div>
     </aside>
-    <div className="workspace-content" inert={mobile && mobileOpen}><header className="topbar"><div className="breadcrumb"><IconButton label="打开导航" className="mobile-only" onClick={() => setMobileOpen(true)}><Menu size={21} /></IconButton><span>工作空间</span><ChevronRight size={14} /><strong>{section}</strong></div>
+    <div className="workspace-content" inert={mobile && mobileOpen}><header className="topbar"><div className="topbar-left"><IconButton label="打开导航" className="mobile-only" onClick={() => setMobileOpen(true)}><Menu size={21} /></IconButton><span className="topbar-title">{section}</span></div>
       <div className="topbar-right" ref={headerRef}><span className="topbar-date">{dateLabel}</span>
+        <button className="explorer-trigger" aria-label="探索工作空间" title="探索工作空间（Ctrl / ⌘ K）" onClick={() => { setPopover(null); setExplorerOpen(true); }}><Search size={16} /><span>搜索或跳转…</span><kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</kbd></button>
         <ThemeControl />
-        <button className="explorer-trigger" aria-label="探索工作空间" title="探索工作空间（Ctrl / ⌘ K）" onClick={() => { setPopover(null); setExplorerOpen(true); }}><Compass size={17} /><span>探索</span><kbd>{/Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K'}</kbd></button>
         <div className="notification-anchor"><button className={`notification-trigger ${popover === 'notifications' ? 'active' : ''}`} aria-label={`通知${notifications.data?.unread ? `，${notifications.data.unread} 条未读` : ''}`} aria-expanded={popover === 'notifications'} onClick={() => setPopover(popover === 'notifications' ? null : 'notifications')}><Bell size={20} />{!!notifications.data?.unread && <span>{notifications.data.unread > 99 ? '99+' : notifications.data.unread}</span>}</button>
           {popover === 'notifications' && <section className="notifications-popover" aria-label="站内通知"><header><h2>通知<span>{notifications.data?.unread || 0} 条未读</span></h2><IconButton label="全部标为已读" disabled={!notifications.data?.unread || markRead.isPending} onClick={() => markRead.mutate(undefined)}><CheckCheck size={18} /></IconButton></header>
             <div className="notifications-list">{notifications.isPending ? <Loading /> : notifications.isError ? <ErrorPanel error={notifications.error} retry={() => void notifications.refetch()} /> : !notifications.data?.items.length ? <EmptyState title="暂时没有新通知" description="任务分配、到期提醒和团队共享会出现在这里。" icon={<Bell size={25} />} /> : notifications.data.items.map(item => <button className={`notification-item ${item.readAt ? '' : 'unread'}`} key={item.id} onClick={() => openNotification(item)}>

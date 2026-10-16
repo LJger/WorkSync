@@ -1,0 +1,200 @@
+/*
+ * Design tokens. Colors are tuned so body text keeps WCAG AA contrast on every
+ * surface level, including the translucent glass layers over the canvas.
+ * Keep --canvas aligned with public/theme-init.js and client/theme.tsx.
+ */
+:root {
+  color-scheme: light;
+
+  /* Surfaces */
+  --canvas: #eef1f4;
+  --surface: #ffffff;
+  --surface-subtle: #f5f7f9;
+  --surface-hover: #edf0f3;
+  --lane: rgb(16 24 40 / 4%);
+  --glass-1: rgb(255 255 255 / 62%);
+  --glass-2: rgb(255 255 255 / 86%);
+  --glass-3: rgb(255 255 255 / 92%);
+  --glass-solid: #f8f9fb;
+  --glass-border: rgb(16 24 40 / 7%);
+  --glass-highlight: rgb(255 255 255 / 80%);
+  --ambient-1: rgb(15 110 126 / 9%);
+  --ambient-2: rgb(84 104 160 / 7%);
+
+  /* Text */
+  --ink: #101a24;
+  --ink-soft: #2b3946;
+  --muted: #5a6774;
+
+  /* Lines */
+  --line: #e3e7ec;
+  --line-strong: #cfd6de;
+
+  /* Accent */
+  --accent: #0f6e7e;
+  --accent-deep: #0b5d6b;
+  --accent-hover: #0c6271;
+  --accent-light: #e4f1f3;
+  --accent-border: #b5d6dc;
+  --accent-glow: rgb(15 110 126 / 16%);
+  --on-accent: #ffffff;
+
+  /* Status */
+  --success: #3f6a53;
+  --success-bg: #e9f4ed;
+  --warning: #805d1f;
+  --warning-bg: #faf1e1;
+  --warning-border: #e9d7b3;
+  --danger: #b2443c;
+  --danger-bg: #fdefec;
+  --danger-border: #f0cdc7;
+  --danger-fill: #b8463e;
+  --danger-hover: #a03a33;
+  --on-danger: #ffffff;
+  --violet: #5d6690;
+  --violet-bg: #eceef9;
+  --rose: #7c5470;
+  --rose-bg: #f6ecf2;
+  --surface-overdue: #fdf4f2;
+  --surface-pinned: #eef6f7;
+
+  /* Ordered status ramp (todo → in progress → done): one hue, light to dark.
+     Validated with the dataviz palette checker against the tile surfaces. */
+  --meter-1: #88bac1;
+  --meter-2: #46909a;
+  --meter-3: #0f6e7e;
+
+  /* Effects */
+  --scrim: rgb(14 22 34 / 34%);
+  --focus-ring: rgb(15 110 126 / 24%);
+  --shadow-rgb: 16 24 40;
+  --elev-1: 0 1px 2px rgb(var(--shadow-rgb) / 5%), 0 1px 1px rgb(var(--shadow-rgb) / 3%);
+  --elev-2: 0 2px 4px rgb(var(--shadow-rgb) / 4%), 0 8px 18px -6px rgb(var(--shadow-rgb) / 10%);
+  --elev-3: 0 4px 8px rgb(var(--shadow-rgb) / 4%), 0 18px 36px -10px rgb(var(--shadow-rgb) / 16%);
+  --elev-4: 0 8px 16px rgb(var(--shadow-rgb) / 6%), 0 30px 60px -14px rgb(var(--shadow-rgb) / 26%);
+  --blur-glass: blur(20px) saturate(160%);
+  --control-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%235a6774' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+
+  /* Shape */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+
+  /* Type: only weights 400 / 500 / 600 exist in every system CJK font. */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", system-ui, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 30px;
+  --text-display: 40px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(.22, .8, .24, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  /* Layout */
+  --sidebar-width: 236px;
+  --shell-gap: 12px;
+  --control-height: 40px;
+
+  /* Layers. Dialogs use the browser top layer and need no value here. */
+  --z-topbar: 20;
+  --z-sidebar: 30;
+  --z-popover: 50;
+  --z-calendar: 60;
+  --z-mobile-scrim: 70;
+  --z-mobile-nav: 80;
+  --z-toast: 90;
+  --z-skip-link: 100;
+  --z-drag-target: 1000;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --canvas: #0c1117;
+  --surface: #151b23;
+  --surface-subtle: #1a212b;
+  --surface-hover: #212a35;
+  --lane: rgb(0 0 0 / 22%);
+  --glass-1: rgb(22 28 36 / 64%);
+  --glass-2: rgb(21 27 35 / 88%);
+  --glass-3: rgb(26 33 43 / 94%);
+  --glass-solid: #171e27;
+  --glass-border: rgb(255 255 255 / 7%);
+  --glass-highlight: rgb(255 255 255 / 5%);
+  --ambient-1: rgb(92 192 207 / 12%);
+  --ambient-2: rgb(110 128 200 / 10%);
+
+  --ink: #e8edf2;
+  --ink-soft: #cdd6df;
+  --muted: #9aa6b3;
+
+  --line: #263040;
+  --line-strong: #364253;
+
+  --accent: #5cc0cf;
+  --accent-deep: #85d6e1;
+  --accent-hover: #74ccd9;
+  --accent-light: #18323a;
+  --accent-border: #2f5560;
+  --accent-glow: rgb(92 192 207 / 20%);
+  --on-accent: #0b2329;
+
+  --success: #a3d6bb;
+  --success-bg: #1d3329;
+  --warning: #e6c384;
+  --warning-bg: #332b20;
+  --warning-border: #5f4d2f;
+  --danger: #f4a49c;
+  --danger-bg: #3a2729;
+  --danger-border: #6a403b;
+  --danger-fill: #b64741;
+  --danger-hover: #9d3834;
+  --on-danger: #ffffff;
+  --violet: #c4c9ed;
+  --violet-bg: #2b2f42;
+  --rose: #e0b6d0;
+  --rose-bg: #372a37;
+  --surface-overdue: #2a1f22;
+  --surface-pinned: #16292e;
+
+  --meter-1: #2b5a61;
+  --meter-2: #4f9ca6;
+  --meter-3: #8fd3dc;
+
+  --scrim: rgb(2 6 12 / 62%);
+  --focus-ring: rgb(92 192 207 / 30%);
+  --shadow-rgb: 0 0 0;
+  --elev-1: 0 1px 2px rgb(0 0 0 / 30%);
+  --elev-2: 0 2px 4px rgb(0 0 0 / 24%), 0 8px 18px -6px rgb(0 0 0 / 40%);
+  --elev-3: 0 4px 8px rgb(0 0 0 / 24%), 0 18px 36px -10px rgb(0 0 0 / 52%);
+  --elev-4: 0 8px 16px rgb(0 0 0 / 28%), 0 30px 60px -14px rgb(0 0 0 / 64%);
+  --control-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa6b3' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Glass falls back to solid surfaces when transparency would hurt legibility. */
+@media (prefers-reduced-transparency: reduce) {
+  :root, :root[data-theme="dark"] {
+    --glass-1: var(--glass-solid);
+    --glass-2: var(--surface);
+    --glass-3: var(--surface);
+    --blur-glass: none;
+  }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root, :root[data-theme="dark"] {
+    --glass-1: var(--glass-solid);
+    --glass-3: var(--surface);
+  }
+}

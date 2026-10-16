@@ -25,7 +25,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolved;
     document.documentElement.style.colorScheme = resolved;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#101b27' : '#f5f8fc');
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolved === 'dark' ? '#0c1117' : '#eef1f4');
   }, [resolved]);
 
   useEffect(() => {

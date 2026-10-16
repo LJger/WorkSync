@@ -1,19 +1,14 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, CircleDot, FileText, History, LockKeyhole, TriangleAlert } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, CircleDot, FileText, History, LockKeyhole, TriangleAlert } from 'lucide-react';
 import type { AdminUser, MonthlyReport, ReportGroup, Task } from '../shared/types';
 import { formatDateTime, localDate } from '../shared/dates';
 import { reportText } from '../shared/report-text';
 import { api, queryString } from './api';
 import { useAuth } from './auth';
+import { MonthPicker, offsetMonth } from './MonthPicker';
 import { Avatar, CopyButton, EmptyState, ErrorPanel, IconButton, Loading, PageHeader, StatusBadge, TextLinks } from './ui';
-
-function offsetMonth(month: string, offset: number): string {
-  const [year, m] = month.split('-').map(Number);
-  const d = new Date(Date.UTC(year, m - 1 + offset, 1));
-  return d.toISOString().slice(0, 7);
-}
 
 export function ReportsPage() {
   const { user } = useAuth();
@@ -34,7 +29,7 @@ export function ReportsPage() {
       {data && <CopyButton text={reportText(data)} label="复制总结" title="复制月度总结" />}
     </PageHeader>
     <div className="report-controls"><div className="month-switch"><IconButton label="上一个月" onClick={() => setMonth(offsetMonth(month, -1))} disabled={month <= '1900-01'}><ChevronLeft size={18} /></IconButton>
-      <label className="month-input"><CalendarDays size={17} /><input type="month" aria-label="总结月份" value={month} max={currentMonth} min="1900-01" onChange={e => { if (/^(19|20|21)\d{2}-(0[1-9]|1[0-2])$/.test(e.target.value) && e.target.value <= currentMonth) setMonth(e.target.value); }} /></label>
+      <MonthPicker value={month} min="1900-01" max={currentMonth} onChange={setMonth} />
       <IconButton label="下一个月" disabled={current} onClick={() => setMonth(offsetMonth(month, 1))}><ChevronRight size={18} /></IconButton>
     </div><div className="report-scope">{user!.role === 'admin' ? <select aria-label="总结范围" value={selection} onChange={e => setSelection(e.target.value)}><option value="me">我的总结</option><option value="team">团队汇总</option>
       <optgroup label="成员总结">{users.data?.items.filter(u => u.id !== user!.id).map(u => <option key={u.id} value={u.id}>{u.displayName}{u.active ? '' : '（已停用）'}</option>)}</optgroup>

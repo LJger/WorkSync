@@ -19,6 +19,14 @@ export function Avatar({ member, small = false }: { member: Member; small?: bool
   const color = member.username.split('').reduce((sum, c) => sum + c.charCodeAt(0), 0) % 5;
   return <span className={`avatar avatar-${color}${small ? ' avatar-small' : ''}`} title={member.displayName} aria-hidden="true">{member.displayName.slice(0, 1)}</span>;
 }
+export function AvatarStack({ members, max = 3, labelled = true }: { members: Member[]; max?: number; labelled?: boolean }) {
+  const hidden = members.length - max;
+  const names = members.map(m => m.displayName).join('、');
+  return <span className="avatar-stack" title={names} {...labelled ? { role: 'img', 'aria-label': `负责人：${names}` } : { 'aria-hidden': true }}>
+    {members.slice(0, hidden > 0 ? max - 1 : max).map(m => <Avatar member={m} small key={m.id} />)}
+    {hidden > 0 && <span className="avatar-more">+{hidden + 1}</span>}
+  </span>;
+}
 export function StatusIcon({ status, size = 14 }: { status: TaskStatus; size?: number }) {
   const Icon = status === 'done' ? CheckCircle2 : status === 'in_progress' ? CircleDot : Circle;
   return <Icon size={size} aria-hidden="true" />;
@@ -88,8 +96,8 @@ export function ErrorPanel({ error, retry }: { error: unknown; retry: () => void
 export function EmptyState({ title, description, children, icon }: { title: string; description: string; children?: ReactNode; icon?: ReactNode }) {
   return <div className="empty-state"><span className="empty-icon">{icon || <Inbox size={30} strokeWidth={1.4} />}</span><h3>{title}</h3><p>{description}</p>{children}</div>;
 }
-export function PageHeader({ title, description, children }: { title: string; description: string; children?: ReactNode }) {
-  return <header className="page-header"><div><h1>{title}</h1><p>{description}</p></div>{children && <div className="page-actions">{children}</div>}</header>;
+export function PageHeader({ title, description, eyebrow, children }: { title: string; description: string; eyebrow?: string; children?: ReactNode }) {
+  return <header className="page-header"><div>{eyebrow && <p className="page-eyebrow">{eyebrow}</p>}<h1>{title}</h1><p>{description}</p></div>{children && <div className="page-actions">{children}</div>}</header>;
 }
 export function useDebounced<T>(value: T, delay = 250): T {
   const [debounced, setDebounced] = useState(value);

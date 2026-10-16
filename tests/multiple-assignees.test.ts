@@ -24,7 +24,7 @@ async function as(user: User, method: 'GET' | 'POST' | 'PATCH', url: string, pay
 const create = (ids = [one.id, two.id]) => service.store.createTask(creator, { title: '共同任务', description: '所有人共享一套进度', assigneeIds: ids, dueDate: '2026-10-16' });
 
 describe('多人任务与写权限', () => {
-  it('成员都能查看，各范围和分页不重复；只有创建者及管理员可以写', async () => {
+  it('成员都能查看，各范围和分页不重复；负责人只能更新状态，其余修改仅限创建者及管理员', async () => {
     let task = create();
     create([one.id]);
     for (const owner of [one, two]) expect((await as(owner, 'GET', `/api/tasks/${task.id}`)).statusCode).toBe(200);
@@ -36,10 +36,14 @@ describe('多人任务与写权限', () => {
     expect(service.store.taskSummary(admin, { scope: 'all' }).total).toBe(2);
     expect((await as(outsider, 'GET', `/api/tasks/${task.id}`)).statusCode).toBe(404);
     for (const user of [one, two]) {
-      for (const patch of [{ title: '不允许' }, { status: 'done' }, { assigneeIds: [user.id] }, { dueDate: null }])
+      for (const patch of [{ title: '不允许' }, { status: 'done', title: '夹带修改' }, { assigneeIds: [user.id] }, { dueDate: null }])
         expect((await as(user, 'PATCH', `/api/tasks/${task.id}`, { ...patch, version: task.version })).statusCode).toBe(403);
       expect((await as(user, 'POST', `/api/tasks/${task.id}/archive`, { archived: true, version: task.version })).statusCode).toBe(403);
     }
+    const progressed = await as(two, 'PATCH', `/api/tasks/${task.id}`, { status: 'in_progress', version: task.version });
+    expect(progressed.statusCode).toBe(200);
+    task = progressed.json().task as Task;
+    expect(service.store.task(one, task.id).status).toBe('in_progress');
     task = service.store.updateTask(creator, task.id, { version: task.version, status: 'done' });
     task = service.store.archiveTask(admin, task.id, task.version, true);
     expect((await as(one, 'POST', `/api/tasks/${task.id}/archive`, { archived: false, version: task.version })).statusCode).toBe(403);

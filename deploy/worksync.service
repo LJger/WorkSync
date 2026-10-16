@@ -1,0 +1,21 @@
+# systemd 服务示例。按实际情况修改 User、WorkingDirectory 和 node 路径（which node），
+# 然后复制到 /etc/systemd/system/worksync.service。
+[Unit]
+Description=WorkSync
+After=network.target
+
+[Service]
+Type=simple
+User=worksync
+# 服务从该目录读取 .env、dist/public，并把数据写入 data/production。
+WorkingDirectory=/opt/worksync
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node dist/server/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

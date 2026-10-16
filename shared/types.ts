@@ -44,6 +44,10 @@ export type TaskPatch = Partial<TaskInput> & { version: number; status?: TaskSta
 export function canEditTask(user: Pick<User, 'id' | 'role'>, task: Pick<Task, 'creatorId'>): boolean {
   return user.role === 'admin' || task.creatorId === user.id;
 }
+// Assignees may move their own work forward, but only editors change what the work is.
+export function canUpdateTaskStatus(user: Pick<User, 'id' | 'role'>, task: Pick<Task, 'creatorId' | 'assigneeIds'>): boolean {
+  return canEditTask(user, task) || task.assigneeIds.includes(user.id);
+}
 export interface Page<T> { items: T[]; total: number; page: number; pageSize: number }
 export interface TaskSummary {
   total: number;

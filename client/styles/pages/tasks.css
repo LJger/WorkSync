@@ -1,0 +1,946 @@
+/* Overview: a bento row of stat tiles. One hero figure per view. */
+.task-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) repeat(2, minmax(0, 1fr)) minmax(0, 1.25fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.overview-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 148px;
+  padding: 18px 20px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-2);
+  color: var(--ink);
+  text-align: left;
+  box-shadow: var(--elev-1), inset 0 1px 0 var(--glass-highlight);
+  transition: box-shadow var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-spring), border-color var(--dur-fast), background-color var(--dur-fast);
+}
+
+button.overview-item:hover {
+  translate: 0 -2px;
+  box-shadow: var(--elev-3), inset 0 1px 0 var(--glass-highlight);
+}
+
+button.overview-item.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+
+.overview-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+/* Values keep proportional figures; tabular digits look loose at display sizes. */
+.overview-item strong {
+  margin-top: auto;
+  padding-top: 14px;
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -.02em;
+}
+
+.overview-unit {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.overview-item > .overview-arrow {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--muted);
+  transition: translate var(--dur-base) var(--ease-spring), color var(--dur-fast);
+}
+
+button.overview-item:hover > .overview-arrow {
+  color: var(--ink);
+  translate: 2px -2px;
+}
+
+.overview-signal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-hover);
+  color: var(--muted);
+}
+
+.overview-today.has-signal .overview-signal {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.overview-late.has-signal .overview-signal {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* Hero tile: the in-progress count plus the status distribution. */
+.overview-active {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto 1fr auto;
+  column-gap: 28px;
+  background: linear-gradient(150deg, var(--accent-light), var(--glass-2) 48%);
+}
+
+.overview-active .overview-label {
+  grid-column: 1 / -1;
+}
+
+.overview-active strong {
+  grid-row: 2;
+  align-self: end;
+  font-size: var(--text-display);
+}
+
+.overview-active .overview-unit {
+  grid-row: 3;
+}
+
+.meter-todo { background: var(--meter-1); }
+.meter-in_progress { background: var(--meter-2); }
+.meter-done { background: var(--meter-3); }
+
+/* Status counts sit beside the hero figure; the dot carries identity, text stays in ink. */
+.status-legend {
+  display: flex;
+  grid-row: 2 / 4;
+  grid-column: 2;
+  flex-direction: column;
+  align-self: end;
+  justify-self: end;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.status-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.status-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-legend b {
+  min-width: 2ch;
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Completion tile: one ratio, shown as a meter on a lighter step of the same hue. */
+.overview-done .completion-meter {
+  width: 100%;
+  height: 6px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--accent-light);
+}
+
+.overview-done .completion-meter > span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease-out);
+}
+
+.overview-done .overview-unit {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.overview-link {
+  color: var(--accent-deep);
+  font-weight: 500;
+}
+
+/* Scope tabs, view switch and filters */
+.workspace-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.task-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 0 18px;
+}
+
+.filter-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.archive-control {
+  position: relative;
+}
+
+/* While dragging, the archive target sits above the drag overlay. */
+.archive-control:has(.drop-ready) {
+  z-index: var(--z-drag-target);
+}
+
+.archive-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+  box-shadow: var(--elev-1);
+  transition: border-color var(--dur-fast), background-color var(--dur-fast), color var(--dur-fast), box-shadow var(--dur-base);
+}
+
+.archive-toggle:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.archive-toggle.active {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent-deep);
+}
+
+/* The drop target only changes paint, never its box: hit tests depend on it. */
+.archive-toggle.drop-ready {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-light);
+  color: var(--accent-deep);
+  animation: drop-breathe 1.6s var(--ease-out) infinite;
+}
+
+.archive-toggle.drop-active {
+  border-style: solid;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 0 6px var(--focus-ring), var(--elev-3);
+  animation: none;
+  transition: none;
+}
+
+@keyframes drop-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px var(--focus-ring); }
+  50% { box-shadow: 0 0 0 7px var(--focus-ring); }
+}
+
+.archive-drop-hint {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent-deep);
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  box-shadow: var(--elev-3);
+  pointer-events: none;
+  animation: pop-in var(--dur-base) var(--ease-spring);
+}
+
+.archive-drop-hint.is-over {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.archive-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--accent-light);
+  color: var(--accent-deep);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+}
+
+.archive-banner button {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--accent-deep);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--elev-1);
+}
+
+/* List view */
+.task-table {
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl);
+  background: var(--glass-2);
+  box-shadow: var(--elev-1), inset 0 1px 0 var(--glass-highlight);
+}
+
+.task-table-head, .task-row {
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) 128px 168px 128px 34px;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.task-table-head {
+  min-height: 40px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.task-table-head > span:first-child {
+  padding-left: 34px;
+}
+
+.task-row {
+  position: relative;
+  min-height: 72px;
+  border-radius: var(--radius-lg);
+  transition: background-color var(--dur-fast), box-shadow var(--dur-base) var(--ease-out);
+}
+
+.task-row + .task-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 50px;
+  height: 1px;
+  background: var(--line);
+  transition: opacity var(--dur-fast);
+}
+
+.task-row:hover {
+  background: var(--surface);
+  box-shadow: var(--elev-2);
+}
+
+.task-row:hover::before, .task-row:hover + .task-row::before {
+  opacity: 0;
+}
+
+.task-row.task-late {
+  background: var(--surface-overdue);
+}
+
+.task-row.task-late::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--danger-fill);
+}
+
+.task-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.complete-button {
+  display: flex;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--on-accent);
+  transition: border-color var(--dur-fast), background-color var(--dur-fast), scale var(--dur-base) var(--ease-spring);
+}
+
+.complete-button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  scale: 1.08;
+}
+
+.complete-button.completed {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.complete-button.completed svg {
+  animation: check-pop var(--dur-slow) var(--ease-spring);
+}
+
+@keyframes check-pop {
+  from { opacity: 0; transform: scale(.4); }
+}
+
+.task-title-button {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  text-align: left;
+}
+
+.task-title-button > span {
+  display: block;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-title-button small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-done .task-title-button > span {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--line-strong);
+}
+
+.assignee-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--ink-soft);
+  font-size: var(--text-xs);
+}
+
+.assignee-cell > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-open-cell .icon-button {
+  color: var(--muted);
+  opacity: 0;
+  border-radius: 50%;
+}
+
+.task-row:hover .task-open-cell .icon-button,
+.task-row:focus-within .task-open-cell .icon-button {
+  opacity: 1;
+}
+
+.task-table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 6px 16px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.task-table-footer .button {
+  font-size: var(--text-xs);
+}
+
+/* Board: recessed lanes, cards that lift on hover and tilt when picked up. */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(250px, 1fr));
+  align-items: start;
+  gap: 16px;
+  padding-bottom: 16px;
+  overflow-x: auto;
+}
+
+.kanban-column {
+  min-height: 360px;
+  padding: 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xl);
+  background: var(--lane);
+  transition: background-color var(--dur-fast), border-color var(--dur-fast), box-shadow var(--dur-base);
+}
+
+.kanban-column.drop-active {
+  border-color: var(--accent-border);
+  background: var(--accent-light);
+  box-shadow: inset 0 0 0 1px var(--accent-border), inset 0 0 28px var(--accent-glow);
+}
+
+.column-header {
+  margin-bottom: 12px;
+  padding: 2px 6px;
+}
+
+.column-header > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+}
+
+.column-header h2 {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.column-in_progress .column-header > span { color: var(--accent); }
+.column-done .column-header > span { color: var(--success); }
+
+.column-count {
+  padding: 1px 8px;
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--elev-1);
+}
+
+.column-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* dnd-kit writes `transform` inline, so hover lift uses the separate `translate` property. */
+.board-card {
+  position: relative;
+  padding: 14px 14px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-1), inset 0 1px 0 var(--glass-highlight);
+  transition: box-shadow var(--dur-base) var(--ease-out), translate var(--dur-base) var(--ease-spring), border-color var(--dur-fast);
+}
+
+@media (hover: hover) {
+  .board-card:hover:not(.dragging) {
+    translate: 0 -2px;
+    border-color: var(--accent-border);
+    box-shadow: var(--elev-3), inset 0 1px 0 var(--glass-highlight);
+  }
+}
+
+.board-card.card-overdue {
+  background: var(--surface-overdue);
+}
+
+.board-card.card-overdue::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: -1px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--danger-fill);
+}
+
+.board-card.dragging {
+  opacity: .32;
+  border-style: dashed;
+  border-color: var(--line-strong);
+  box-shadow: none;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.card-top .status-select {
+  width: 104px;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  transition: background-color var(--dur-fast), color var(--dur-fast);
+}
+
+.drag-handle:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.card-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--text-base);
+  font-weight: 500;
+  line-height: 1.7;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.card-description {
+  display: -webkit-box;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.75;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.empty-column {
+  padding: 36px 12px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.7;
+  text-align: center;
+}
+
+.load-column {
+  font-size: var(--text-xs);
+}
+
+/* The picked-up card: tilted, slightly enlarged, deepest elevation. */
+.drag-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: start;
+  gap: 12px;
+  width: 288px;
+  padding: 16px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--elev-4), inset 0 1px 0 var(--glass-highlight);
+  transform: rotate(2deg) scale(1.02);
+  cursor: grabbing;
+  animation: card-lift var(--dur-base) var(--ease-spring);
+}
+
+.drag-preview strong {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  line-height: 1.7;
+}
+
+@keyframes card-lift {
+  from { transform: none; box-shadow: var(--elev-1); }
+}
+
+/* Task editor drawer */
+.task-editor .modal-body {
+  flex: 1;
+}
+
+.task-title-input {
+  font-size: var(--text-lg);
+  font-weight: 500;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.field .task-title-input {
+  font-size: var(--text-lg);
+}
+
+.task-title-input::placeholder {
+  font-size: var(--text-md);
+  font-weight: 400;
+}
+
+.task-editor-footer {
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0 0;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--line);
+}
+
+.task-metadata > div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  font-size: var(--text-xs);
+}
+
+.task-metadata dt {
+  width: 64px;
+  color: var(--muted);
+}
+
+.task-metadata dd {
+  margin: 0;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (forced-colors: active) {
+  .status-legend i {
+    border: 1px solid CanvasText;
+  }
+  .archive-toggle.drop-active, .kanban-column.drop-active {
+    outline: 2px solid Highlight;
+  }
+}
+
+@media (max-width: 1200px) {
+  .task-overview {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .overview-active {
+    grid-column: 1 / -1;
+    min-height: 0;
+  }
+  .overview-item {
+    min-height: 124px;
+  }
+  .task-table-head, .task-row {
+    grid-template-columns: minmax(170px, 1fr) 112px 132px 108px 30px;
+    gap: 10px;
+  }
+  .search-field {
+    width: 240px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .task-table-head, .task-row {
+    grid-template-columns: minmax(150px, 1fr) 106px 112px 96px;
+    gap: 8px;
+  }
+  .task-table-head > span:last-child, .task-open-cell {
+    display: none;
+  }
+  .task-toolbar {
+    align-items: start;
+  }
+  .filter-controls {
+    flex: 1;
+    justify-content: flex-end;
+  }
+  .search-field {
+    width: 220px;
+  }
+  .archive-toggle span {
+    display: none;
+  }
+}
+
+@media (max-width: 800px) {
+  .task-table-head, .task-row {
+    grid-template-columns: minmax(160px, 1fr) 108px 104px 100px;
+  }
+  .task-toolbar .search-field {
+    width: 250px;
+  }
+}
+
+@media (max-width: 600px) {
+  .task-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .overview-item {
+    min-height: 104px;
+    padding: 14px 16px;
+    border-radius: var(--radius-lg);
+  }
+  .overview-item strong {
+    padding-top: 10px;
+    font-size: 26px;
+  }
+  .overview-active {
+    column-gap: 18px;
+  }
+  .overview-active strong {
+    font-size: 36px;
+  }
+  .overview-done {
+    grid-column: 1 / -1;
+    min-height: 0;
+  }
+  .overview-item > .overview-arrow {
+    display: none;
+  }
+  .workspace-topline {
+    gap: 8px;
+  }
+  .task-toolbar {
+    gap: 10px;
+    padding: 14px 0;
+  }
+  .task-toolbar .search-field {
+    width: 100%;
+  }
+  .filter-controls {
+    justify-content: flex-start;
+    width: 100%;
+    gap: 8px;
+  }
+  .archive-toggle {
+    height: 36px;
+  }
+  .archive-toggle span {
+    display: inline;
+  }
+  .task-table {
+    padding: 4px;
+    border-radius: var(--radius-lg);
+  }
+  .task-table-head {
+    display: none;
+  }
+  .task-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px 12px;
+    min-height: 92px;
+    padding: 14px;
+  }
+  .task-row + .task-row::before {
+    left: 14px;
+    right: 14px;
+  }
+  .task-name-cell {
+    grid-column: 1 / -1;
+    align-items: start;
+    gap: 12px;
+  }
+  .complete-button {
+    margin-top: 2px;
+  }
+  .task-title-button {
+    padding: 0;
+  }
+  .task-title-button > span {
+    line-height: 1.6;
+    white-space: normal;
+  }
+  .task-status-cell {
+    margin-left: 32px;
+  }
+  .assignee-cell {
+    display: none;
+  }
+  .task-date-cell {
+    text-align: right;
+  }
+  .task-table-footer {
+    min-height: 42px;
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  .task-table-footer > .muted {
+    display: none;
+  }
+  .kanban-board {
+    grid-template-columns: repeat(3, 272px);
+    gap: 12px;
+  }
+  .kanban-column {
+    padding: 10px;
+  }
+  .archive-banner {
+    align-items: start;
+  }
+  .archive-banner svg {
+    margin-top: 2px;
+  }
+}

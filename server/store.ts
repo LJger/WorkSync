@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from './database.js';
 import { fail } from './errors.js';
 import { addDays, localDate, monthBounds } from '../shared/dates.js';
-import { canEditTask } from '../shared/types.js';
+import { canEditTask, canUpdateTaskStatus } from '../shared/types.js';
 import type {
   AdminUser, Category, Member, MonthlyReport, Notification, Page, Role, SharedInfo,
   SharedInput, Task, TaskInput, TaskNotificationKind, TaskPatch, TaskScope, TaskStatus, TaskSummary, User,
@@ -180,6 +180,12 @@ export class Store {
   private requireTaskEditor(actor: User, task: Task): void {
     if (!canEditTask(actor, task)) fail(403, 'TASK_READ_ONLY', '只有任务创建者或管理员可以修改、归档或恢复这项任务。');
   }
+  private requireTaskWriter(actor: User, task: Task, input: TaskPatch): void {
+    const statusOnly = input.status !== undefined && input.title === undefined && input.description === undefined
+      && input.assigneeIds === undefined && input.dueDate === undefined;
+    if (statusOnly && canUpdateTaskStatus(actor, task)) return;
+    if (!canEditTask(actor, task)) fail(403, 'TASK_READ_ONLY', '负责人只能更新任务状态；修改内容、负责人或日期需要任务创建者或管理员。');
+  }
   private rawTask(id: string): Task {
     const row = this.db.prepare(`${taskSelect} WHERE t.id=?`).get(id) as TaskRow | undefined;
     if (!row) fail(404, 'NOT_FOUND', '任务不存在或你没有查看权限。');
@@ -253,7 +259,7 @@ export class Store {
   updateTask(actor: User, id: string, input: TaskPatch): Task {
     return this.db.transaction(() => {
       const old = this.task(actor, id);
-      this.requireTaskEditor(actor, old);
+      this.requireTaskWriter(actor, old, input);
       if (old.version !== input.version) fail(409, 'VERSION_CONFLICT', '任务已被其他人更新，请重新加载后再保存。');
       if (old.archivedAt) fail(400, 'TASK_ARCHIVED', '请先恢复任务，再修改内容。');
       const status = input.status ?? old.status;

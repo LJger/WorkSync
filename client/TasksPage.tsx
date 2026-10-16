@@ -3,21 +3,28 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClie
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type KeyboardCoordinateGetter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CircleCheck, GripVertical, KanbanSquare, LayoutList, LoaderCircle, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, CalendarClock, Check, GripVertical, KanbanSquare, LayoutList, LoaderCircle, Plus, Search, SlidersHorizontal, TriangleAlert, X } from 'lucide-react';
 import type { Member, Page, Task, TaskInput, TaskScope, TaskStatus, TaskSummary } from '../shared/types';
-import { STATUS_LABELS } from '../shared/types';
+import { STATUS_LABELS, canEditTask, canUpdateTaskStatus } from '../shared/types';
 import { formatDateTime, localDate } from '../shared/dates';
 import { api, ApiError, errorMessage, queryString } from './api';
 import { useAuth } from './auth';
 import { TaskDateFilter, dateFilterQuery, type DateFilterQuery, type DateFilterValue } from './TaskDateFilter';
-import { Avatar, Button, DueDate, EmptyState, ErrorPanel, Field, FormError, IconButton, Loading, Modal, PageHeader, StatusBadge, StatusIcon, StatusSelect, useDebounced, useUI } from './ui';
+import { DatePicker } from './DatePicker';
+import { Avatar, AvatarStack, Button, DueDate, EmptyState, ErrorPanel, Field, FormError, IconButton, Loading, Modal, PageHeader, StatusBadge, StatusIcon, StatusSelect, useDebounced, useUI } from './ui';
 
 export async function invalidateWork(client: QueryClient) {
   await Promise.all(['tasks', 'task', 'reports', 'notifications', 'users'].map(key => client.invalidateQueries({ queryKey: [key] })));
 }
 type Filters = { scope: TaskScope; q: string; status?: TaskStatus; archived: boolean; assigneeId: string } & DateFilterQuery;
 const statuses: TaskStatus[] = ['todo', 'in_progress', 'done'];
+const summaryKeys = { todo: 'todo', in_progress: 'inProgress', done: 'done' } as const;
 const archiveTarget = 'task-archive';
+const assigneeNames = (task: Task) => task.assignees.length > 1 ? `${task.assignees[0].displayName} 等 ${task.assignees.length} 人` : task.assignees[0]?.displayName ?? '';
+function greeting(now = new Date()) {
+  const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', hour: 'numeric', hourCycle: 'h23' }).format(now));
+  return hour < 5 ? '夜深了' : hour < 11 ? '早上好' : hour < 13 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
+}
 // A large card overlapping a small archive button must not archive it accidentally.
 const boardCollision: CollisionDetection = args => pointerWithin({ ...args, pointerCoordinates: args.pointerCoordinates ?? {
   x: args.collisionRect.left + args.collisionRect.width / 2, y: args.collisionRect.top + args.collisionRect.height / 2,
@@ -136,18 +143,27 @@ export function TasksPage() {
   const tasks = list.data?.pages.flatMap(page => page.items) || [];
   const count = summary.data;
   const selectedTask = params.get('task');
+  const today = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+  const completion = count?.total ? Math.round(count.done / count.total * 100) : 0;
 
   return <>
-    <PageHeader title={scope === 'all' ? '团队任务' : scope === 'created' ? '我创建的任务' : '我的任务'}
+    <PageHeader title={scope === 'all' ? '团队任务' : scope === 'created' ? '我创建的任务' : '我的任务'} eyebrow={`${greeting()}，${user!.displayName} · ${today}`}
       description={scope === 'all' ? '看清团队分工，及时跟进需要协调的事情。' : scope === 'created' ? '跟进自己安排的工作，看看事情推进到哪里。' : '安排好手头的事，记下每一点进展。'}>
       <Button variant="primary" onClick={() => open('new')}><Plus size={18} />新建任务</Button>
     </PageHeader>
 
     <section className="task-overview" aria-label="任务概览">
-      <div className="overview-item overview-active"><span className="overview-label">进行中</span><strong>{count?.inProgress ?? '—'}</strong><span className="overview-unit">项正在推进</span></div>
-      <button className={`overview-item overview-today ${dateQuery.due === 'today' ? 'is-selected' : ''}`} onClick={() => toggleDate('today')} aria-label="筛选今天截止的任务"><span className="overview-label">今天截止</span><strong>{count?.dueToday ?? '—'}</strong><ArrowUpRight size={16} /></button>
-      <button className={`overview-item overview-late ${dateQuery.due === 'overdue' ? 'is-selected' : ''}`} onClick={() => toggleDate('overdue')} aria-label="筛选逾期任务"><span className="overview-label">需要跟进</span><strong>{count?.overdue ?? '—'}</strong><span className="overview-unit">项已逾期</span><ArrowUpRight size={16} /></button>
-      <button className="overview-note" onClick={() => navigate('/reports')}><CircleCheck size={20} /><span><strong>回顾本月</strong>看看已完成的工作</span><ArrowUpRight size={15} /></button>
+      <div className="overview-item overview-active"><span className="overview-label">进行中</span><strong>{count?.inProgress ?? '—'}</strong><span className="overview-unit">项正在推进</span>
+        <ul className="status-legend" aria-label="状态分布">{statuses.map(s => <li key={s}><i className={`meter-${s}`} aria-hidden="true" />{STATUS_LABELS[s]}<b>{count?.[summaryKeys[s]] ?? '—'}</b></li>)}</ul>
+      </div>
+      <button className={`overview-item overview-today ${count?.dueToday ? 'has-signal' : ''} ${dateQuery.due === 'today' ? 'is-selected' : ''}`} onClick={() => toggleDate('today')} aria-label="筛选今天截止的任务" aria-pressed={dateQuery.due === 'today'}>
+        <span className="overview-label"><span className="overview-signal"><CalendarClock size={14} /></span>今天截止</span><strong>{count?.dueToday ?? '—'}</strong><span className="overview-unit">项需要今天完成</span><ArrowUpRight size={16} className="overview-arrow" /></button>
+      <button className={`overview-item overview-late ${count?.overdue ? 'has-signal' : ''} ${dateQuery.due === 'overdue' ? 'is-selected' : ''}`} onClick={() => toggleDate('overdue')} aria-label="筛选逾期任务" aria-pressed={dateQuery.due === 'overdue'}>
+        <span className="overview-label"><span className="overview-signal"><TriangleAlert size={14} /></span>需要跟进</span><strong>{count?.overdue ?? '—'}</strong><span className="overview-unit">项已逾期</span><ArrowUpRight size={16} className="overview-arrow" /></button>
+      <button className="overview-item overview-done" onClick={() => navigate('/reports')} aria-label="查看月度总结">
+        <span className="overview-label">完成进度</span><strong>{count ? `${completion}%` : '—'}</strong>
+        <span className="completion-meter" aria-hidden="true"><span style={{ width: `${completion}%` }} /></span>
+        <span className="overview-unit"><span>已完成 {count?.done ?? '—'} / {count?.total ?? '—'} 项</span><span className="overview-link">回顾本月</span></span><ArrowUpRight size={16} className="overview-arrow" /></button>
     </section>
 
     <DndContext sensors={sensors} collisionDetection={boardCollision} onDragStart={event => { setArchiveDrop(false); setDragging(event.active.data.current?.task as Task); }} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
@@ -171,7 +187,7 @@ export function TasksPage() {
           {view === 'list' && <label className="filter-select"><SlidersHorizontal size={14} /><select aria-label="按状态筛选" value={status} onChange={e => setStatus(e.target.value as TaskStatus | '')}><option value="">全部状态</option>{statuses.map(s => <option value={s} key={s}>{STATUS_LABELS[s]}</option>)}</select></label>}
           <TaskDateFilter value={dateFilter} onChange={setDateFilter} />
           {scope !== 'assigned' && <label className="filter-select"><select aria-label="按负责人筛选" value={assigneeId} onChange={e => setAssigneeId(e.target.value)}><option value="">全部负责人</option>{members.data?.items.map(m => <option value={m.id} key={m.id}>{m.displayName}</option>)}</select></label>}
-          <ArchiveDropTarget buttonRef={archiveButton} archived={archived} enabled={view === 'board' && !archived && !busy} dragging={!!dragging} pending={archiveTask.isPending} onToggle={() => setArchived(!archived)} />
+          <ArchiveDropTarget buttonRef={archiveButton} archived={archived} enabled={view === 'board' && !archived && !busy && (!dragging || canEditTask(user!, dragging))} dragging={!!dragging} pending={archiveTask.isPending} onToggle={() => setArchived(!archived)} />
         </div>
       </div>
       {archived && <div className="archive-banner"><Archive size={15} />正在查看归档任务，历史记录仍然保留。<button onClick={() => setArchived(false)}>返回当前任务</button></div>}
@@ -181,19 +197,19 @@ export function TasksPage() {
             <Button onClick={hasFilters ? clearFilters : () => open('new')} variant={hasFilters ? 'secondary' : 'primary'}>{hasFilters ? '清空筛选' : '新建任务'}</Button>
           </EmptyState> : <div className="task-table" role="table" aria-label="任务列表">
             <div className="task-table-head" role="row"><span role="columnheader">任务</span><span role="columnheader">状态</span><span role="columnheader">负责人</span><span role="columnheader">截止日期</span><span /></div>
-            {tasks.map(original => { const task = move?.id === original.id ? move : original; return <div className={`task-row ${task.status === 'done' ? 'task-done' : ''} ${task.overdue ? 'task-late' : ''}`} role="row" key={task.id}>
-              <div className="task-name-cell" role="cell"><button className={`complete-button ${task.status === 'done' ? 'completed' : ''}`} aria-label={task.status === 'done' ? `重新打开「${task.title}」` : `完成「${task.title}」`} disabled={!!task.archivedAt || busy}
-                onClick={() => onStatus(original, task.status === 'done' ? 'todo' : 'done')}>{task.status === 'done' && <Check size={13} />}</button>
+            {tasks.map(original => { const task = move?.id === original.id ? move : original; const locked = busy || !canUpdateTaskStatus(user!, task); return <div className={`task-row ${task.status === 'done' ? 'task-done' : ''} ${task.overdue ? 'task-late' : ''}`} role="row" key={task.id}>
+              <div className="task-name-cell" role="cell"><button className={`complete-button ${task.status === 'done' ? 'completed' : ''}`} aria-label={task.status === 'done' ? `重新打开「${task.title}」` : `完成「${task.title}」`} disabled={!!task.archivedAt || locked}
+                onClick={() => onStatus(original, task.status === 'done' ? 'todo' : 'done')}>{task.status === 'done' && <Check size={13} strokeWidth={3} />}</button>
                 <button className="task-title-button" onClick={() => open(task.id)}><span>{task.title}</span>{task.description && <small>{task.description.split('\n')[0]}</small>}</button></div>
-              <div role="cell" className="task-status-cell"><StatusSelect task={task} disabled={busy} onChange={next => onStatus(original, next)} /></div>
-              <div role="cell" className="assignee-cell"><Avatar member={task.assignee} small /><span>{task.assignee.displayName}</span></div>
+              <div role="cell" className="task-status-cell"><StatusSelect task={task} disabled={locked} onChange={next => onStatus(original, next)} /></div>
+              <div role="cell" className="assignee-cell"><AvatarStack members={task.assignees} labelled={false} /><span>{assigneeNames(task)}</span></div>
               <div role="cell" className="task-date-cell"><DueDate task={task} /></div>
               <div role="cell" className="task-open-cell"><IconButton label={`查看「${task.title}」`} onClick={() => open(task.id)}><ArrowUpRight size={16} /></IconButton></div>
             </div>; })}
             <footer className="task-table-footer"><span>已显示 {tasks.length} / {list.data?.pages[0].total || 0} 项任务</span>{list.hasNextPage ? <Button variant="ghost" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}><ArrowDown size={14} />加载更多</Button> : <span className="muted">状态更新后自动保存</span>}</footer>
           </div>}
       </> : <div className="kanban-board">{statuses.map(column => <BoardColumn key={column} status={column} filters={{ ...filters, status: column }} move={move} open={open} changeStatus={onStatus} disabled={busy} />)}</div>}
-      <DragOverlay style={{ pointerEvents: 'none' }} dropAnimation={reducedMotion || archiveDrop ? null : { duration: 160, easing: 'ease-out' }}>{dragging && <div className="drag-preview" aria-hidden="true"><StatusBadge status={dragging.status} /><strong>{dragging.title}</strong><DueDate task={dragging} /></div>}</DragOverlay>
+      <DragOverlay style={{ pointerEvents: 'none' }} dropAnimation={reducedMotion || archiveDrop ? null : { duration: 220, easing: 'cubic-bezier(.22, .8, .24, 1)' }}>{dragging && <div className="drag-preview" aria-hidden="true"><StatusBadge status={dragging.status} /><strong>{dragging.title}</strong><DueDate task={dragging} /></div>}</DragOverlay>
     </section>
     </DndContext>
     {selectedTask && <TaskDrawer id={selectedTask} onClose={close} />}
@@ -229,13 +245,15 @@ function BoardColumn({ status, filters, move, open, changeStatus, disabled }: { 
   </section>;
 }
 function BoardCard({ task, open, changeStatus, disabled }: { task: Task; open: (id: string) => void; changeStatus: (task: Task, target: TaskStatus) => void; disabled: boolean }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: task.id, data: { task }, disabled: disabled || !!task.archivedAt });
+  const { user } = useAuth();
+  const locked = disabled || !canUpdateTaskStatus(user!, task);
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: task.id, data: { task }, disabled: locked || !!task.archivedAt });
   return <article className={`board-card ${isDragging ? 'dragging' : ''} ${task.overdue ? 'card-overdue' : ''}`} ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }}>
-    <div className="card-top"><StatusSelect task={task} disabled={disabled} onChange={target => changeStatus(task, target)} />
-      {!task.archivedAt && <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} disabled={disabled} aria-label={`拖动「${task.title}」`} title="拖动以切换状态或归档"><GripVertical size={16} /></button>}</div>
+    <div className="card-top"><StatusSelect task={task} disabled={locked} onChange={target => changeStatus(task, target)} />
+      {!task.archivedAt && <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} disabled={locked} aria-label={`拖动「${task.title}」`} title="拖动以切换状态或归档"><GripVertical size={16} /></button>}</div>
     <button className="card-title" onClick={() => open(task.id)}>{task.title}</button>
     {task.description && <p className="card-description">{task.description}</p>}
-    <footer className="card-footer"><DueDate task={task} /><span className="card-assignee" title={task.assignee.displayName}><Avatar member={task.assignee} small /></span></footer>
+    <footer className="card-footer"><DueDate task={task} /><AvatarStack members={task.assignees} /></footer>
   </article>;
 }
 
@@ -253,56 +271,76 @@ function TaskEditor({ initial: initialData, members, onClose, reload }: { initia
   const { user } = useAuth();
   const { toast, confirm } = useUI();
   const client = useQueryClient();
+  const initialAssignees = initial?.assigneeIds || [user!.id];
   const [title, setTitle] = useState(initial?.title || '');
   const [description, setDescription] = useState(initial?.description || '');
-  const [assigneeId, setAssigneeId] = useState(initial?.assigneeId || user!.id);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>(initialAssignees);
   const [dueDate, setDueDate] = useState(initial?.dueDate || '');
   const [status, setStatus] = useState<TaskStatus>(initial?.status || 'todo');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const archived = !!initial?.archivedAt;
-  const needsNewOwner = archived && initial?.status !== 'done' && !members.some(m => m.id === initial?.assigneeId);
+  const editor = !initial || canEditTask(user!, initial);
+  const statusEditor = !!initial && canUpdateTaskStatus(user!, initial);
+  const readOnly = archived || !editor;
+  const active = new Set(members.map(m => m.id));
+  const inactiveOwners = initial?.assignees.filter(m => !active.has(m.id)) || [];
+  const needsNewOwner = editor && archived && initial?.status !== 'done' && inactiveOwners.length > 0;
+  const options = [...members, ...inactiveOwners];
+  const assigneesChanged = assigneeIds.length !== initialAssignees.length || assigneeIds.some(id => !initialAssignees.includes(id));
   const conflict = error instanceof ApiError && error.status === 409;
-  const dirty = title !== (initial?.title || '') || description !== (initial?.description || '') || assigneeId !== (initial?.assigneeId || user!.id) || dueDate !== (initial?.dueDate || '') || status !== (initial?.status || 'todo');
+  const dirty = title !== (initial?.title || '') || description !== (initial?.description || '') || assigneesChanged || dueDate !== (initial?.dueDate || '') || status !== (initial?.status || 'todo');
+  const toggleAssignee = (id: string) => setAssigneeIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]);
   const close = async () => {
     if (busy) return;
     if (dirty && !await confirm({ title: '放弃未保存的修改？', message: '这次填写的内容还没有保存。', label: '放弃修改' })) return;
     onClose();
   };
   async function save(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError(null);
-    const body: TaskInput = { title, description, assigneeId, dueDate: dueDate || null };
+    event.preventDefault();
+    if (editor && !assigneeIds.length) { setError('请至少选择一位负责人。'); return; }
+    setBusy(true); setError(null);
+    const body: TaskInput = { title, description, assigneeIds, dueDate: dueDate || null };
     try {
-      if (initial) await api(`/tasks/${initial.id}`, { method: 'PATCH', body: { ...body, status, version: initial.version } });
+      // Assignees who are not editors may only move the status forward.
+      if (initial) await api(`/tasks/${initial.id}`, { method: 'PATCH', body: editor ? { ...body, status, version: initial.version } : { status, version: initial.version } });
       else await api('/tasks', { method: 'POST', body });
       await invalidateWork(client); toast(initial ? '任务已更新' : '任务已创建'); onClose();
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
   async function archive() {
     if (!initial) return;
+    if (archived && !assigneeIds.length) { setError('请至少选择一位负责人。'); return; }
     if (!archived && !await confirm({ title: '归档这项任务？', message: '任务会从日常待办中收起，并停止提醒。历史记录仍会保留，你可以随时恢复。', label: '归档任务' })) return;
     setBusy(true); setError(null);
     try {
       await api(`/tasks/${initial.id}/archive`, { method: 'POST', body: { archived: !archived, version: initial.version,
-        ...(archived && assigneeId !== initial.assigneeId ? { assigneeId } : {}) } });
+        ...(archived && assigneesChanged ? { assigneeIds } : {}) } });
       await invalidateWork(client); toast(archived ? '任务已恢复' : '任务已归档'); onClose();
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
   return <Modal title={initial ? '任务详情' : '新建任务'} subtitle={initial ? `由 ${initial.creator.displayName} 创建` : '先写下一件需要完成的事'} drawer onClose={() => void close()}>
     <form onSubmit={save} className="modal-form task-editor"><div className="modal-body form-stack">
-      {archived && <div className="inline-notice"><Archive size={16} />这项任务已归档，恢复后可以继续编辑。</div>}
-      {needsNewOwner && <div className="inline-notice">原负责人已停用，请选择一位有效成员接手后再恢复任务。</div>}
-      <Field label="任务标题" required><textarea className="task-title-input" rows={2} autoFocus={!initial} value={title} onChange={e => setTitle(e.target.value)} placeholder="这件事需要完成什么？" maxLength={160} required readOnly={archived} /></Field>
-      {initial && <Field label="任务状态"><select value={status} aria-label="任务状态" onChange={e => setStatus(e.target.value as TaskStatus)} disabled={archived}>{statuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}</select></Field>}
-      <div className="form-grid"><Field label="负责人" required><select value={assigneeId} aria-label="负责人" onChange={e => setAssigneeId(e.target.value)} disabled={archived && !needsNewOwner} required>
-        {initial && !members.some(m => m.id === initial.assigneeId) && <option value={initial.assigneeId}>{initial.assignee.displayName}（已停用）</option>}
-        {members.map(m => <option key={m.id} value={m.id}>{m.displayName}{m.id === user!.id ? '（我）' : ''}</option>)}
-      </select></Field><Field label="截止日期"><input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} disabled={archived} /></Field></div>
-      <Field label="任务说明" hint="可补充背景、交付要求或需要参考的链接。"><textarea rows={7} value={description} onChange={e => setDescription(e.target.value)} maxLength={10000} placeholder="补充一点说明，协作时少一些来回确认…" readOnly={archived} /></Field>
+      {archived && <div className="inline-notice"><Archive size={16} />{editor ? '这项任务已归档，恢复后可以继续编辑。' : '这项任务已归档，可由创建者或管理员恢复。'}</div>}
+      {!archived && !editor && <div className="inline-notice">你是这项任务的负责人，可以更新状态；标题、说明、负责人和日期由 {initial!.creator.displayName} 或管理员维护。</div>}
+      {needsNewOwner && <div className="inline-notice">部分负责人已停用，请取消他们并选择有效成员后再恢复任务。</div>}
+      <Field label="任务标题" required><textarea className="task-title-input" rows={2} autoFocus={!initial} value={title} onChange={e => setTitle(e.target.value)} placeholder="这件事需要完成什么？" maxLength={160} required readOnly={readOnly} /></Field>
+      <div className="form-grid">
+        {initial && <Field label="任务状态"><select value={status} aria-label="任务状态" onChange={e => setStatus(e.target.value as TaskStatus)} disabled={archived || !statusEditor}>{statuses.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}</select></Field>}
+        <Field label="截止日期"><DatePicker value={dueDate} onChange={setDueDate} disabled={readOnly} /></Field>
+      </div>
+      <fieldset className="field"><legend className="field-label">负责人<span className="required-mark" aria-hidden="true">*</span></legend>
+        <div className="assignee-options">{options.map(m => { const checked = assigneeIds.includes(m.id); const inactive = !active.has(m.id);
+          return <label className="assignee-chip" key={m.id}><input type="checkbox" checked={checked} onChange={() => toggleAssignee(m.id)}
+            disabled={(readOnly && !needsNewOwner) || (inactive && !checked)} /><Avatar member={m} small />{m.displayName}{m.id === user!.id ? '（我）' : inactive ? '（已停用）' : ''}<Check size={14} className="chip-check" aria-hidden="true" /></label>; })}</div>
+        {editor && !archived && <span className="field-hint">可以选择多位成员一起负责，大家共享同一份进度。</span>}
+      </fieldset>
+      <Field label="任务说明" hint="可补充背景、交付要求或需要参考的链接。"><textarea rows={7} value={description} onChange={e => setDescription(e.target.value)} maxLength={10000} placeholder="补充一点说明，协作时少一些来回确认…" readOnly={readOnly} /></Field>
       {initial && <dl className="task-metadata"><div><dt>创建时间</dt><dd>{formatDateTime(initial.createdAt)}</dd></div><div><dt>最近更新</dt><dd>{formatDateTime(initial.updatedAt)}</dd></div>{initial.completedAt && <div><dt>完成时间</dt><dd>{formatDateTime(initial.completedAt)}</dd></div>}</dl>}
       <FormError error={error} />{conflict && <Button onClick={() => void reload()}>重新加载最新内容</Button>}
-    </div><footer className="modal-footer task-editor-footer"><div>{initial && !archived && <Button variant="ghost" disabled={busy} onClick={() => void archive()}><Archive size={16} />归档</Button>}</div><div className="footer-actions"><Button onClick={() => void close()} disabled={busy}>取消</Button>
-      {archived ? <Button variant="primary" loading={busy} disabled={needsNewOwner && assigneeId === initial!.assigneeId} onClick={() => void archive()}><ArchiveRestore size={16} />恢复任务</Button> : <Button type="submit" variant="primary" loading={busy}>{initial ? '保存更改' : '创建任务'}</Button>}
+    </div><footer className="modal-footer task-editor-footer"><div>{initial && !archived && editor && <Button variant="ghost" disabled={busy} onClick={() => void archive()}><Archive size={16} />归档</Button>}</div><div className="footer-actions"><Button onClick={() => void close()} disabled={busy}>{readOnly && !statusEditor ? '关闭' : '取消'}</Button>
+      {archived ? editor && <Button variant="primary" loading={busy} disabled={needsNewOwner && assigneeIds.some(id => !active.has(id))} onClick={() => void archive()}><ArchiveRestore size={16} />恢复任务</Button>
+        : (editor || statusEditor) && <Button type="submit" variant="primary" loading={busy}>{initial ? '保存更改' : '创建任务'}</Button>}
     </div></footer></form>
   </Modal>;
 }
