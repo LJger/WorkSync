@@ -22,10 +22,11 @@ const username = z.string().trim().toLowerCase().regex(/^[a-z0-9_.-]{3,32}$/, '�
 const name = z.string().trim().min(1, '请填写姓名').max(40, '姓名不能超过 40 个字符');
 const version = z.number().int().positive();
 const date = z.string().refine(validDate, '请选择有效日期');
+const assigneeIds = z.array(z.string().min(1)).min(1, '请至少选择一位负责人').transform(ids => [...new Set(ids)]);
 const taskInput = z.object({
   title: z.string().trim().min(1, '请填写任务标题').max(160, '标题不能超过 160 个字符'),
   description: z.string().max(10000, '任务说明不能超过 10000 个字符').default(''),
-  assigneeId: z.string().min(1, '请选择负责人'),
+  assigneeIds,
   dueDate: date.nullable().default(null),
 }).strict();
 // 更新字段不能继承创建时的默认值，否则仅改状态也可能清空说明与截止日期。
@@ -33,7 +34,7 @@ const taskPatch = z.object({
   version,
   title: z.string().trim().min(1, '请填写任务标题').max(160).optional(),
   description: z.string().max(10000).optional(),
-  assigneeId: z.string().min(1).optional(),
+  assigneeIds: assigneeIds.optional(),
   dueDate: date.nullable().optional(),
   status: z.enum(['todo', 'in_progress', 'done']).optional(),
 }).strict();
@@ -42,7 +43,18 @@ const taskFilters = z.object({
   scope: z.enum(['assigned', 'created', 'all']).default('assigned'),
   q: z.string().trim().max(200).optional(), status: z.enum(['todo', 'in_progress', 'done']).optional(),
   due: z.enum(['overdue', 'today', 'upcoming', 'none']).optional(), assigneeId: z.string().optional(),
+  dueFrom: date.optional(), dueTo: date.optional(),
   archived: z.enum(['true', 'false']).default('false').transform(v => v === 'true'), ...pageFields,
+}).superRefine((input, context) => {
+  if ((input.dueFrom === undefined) !== (input.dueTo === undefined)) {
+    context.addIssue({ code: 'custom', message: '请同时选择开始日期和结束日期', path: ['dueTo'] });
+  }
+  if (input.dueFrom && input.dueTo && input.dueFrom > input.dueTo) {
+    context.addIssue({ code: 'custom', message: '结束日期不能早于开始日期', path: ['dueTo'] });
+  }
+  if (input.due && (input.dueFrom || input.dueTo)) {
+    context.addIssue({ code: 'custom', message: '快捷日期和自定义日期范围不能同时使用', path: ['due'] });
+  }
 });
 const sharedInput = z.object({
   title: z.string().trim().min(1, '请填写标题').max(120, '标题不能超过 120 个字符'),
@@ -198,8 +210,8 @@ export async function createApp(options: AppOptions) {
   });
   app.patch('/api/tasks/:id', async request => ({ task: store.updateTask(request.user!, idParams.parse(request.params).id, taskPatch.parse(request.body)) }));
   app.post('/api/tasks/:id/archive', async request => {
-    const input = z.object({ archived: z.boolean(), version, assigneeId: z.string().min(1).optional() }).strict().parse(request.body);
-    return { task: store.archiveTask(request.user!, idParams.parse(request.params).id, input.version, input.archived, input.assigneeId) };
+    const input = z.object({ archived: z.boolean(), version, assigneeIds: assigneeIds.optional() }).strict().parse(request.body);
+    return { task: store.archiveTask(request.user!, idParams.parse(request.params).id, input.version, input.archived, input.assigneeIds) };
   });
 
   app.get('/api/notifications', async request => store.notifications(request.user!));

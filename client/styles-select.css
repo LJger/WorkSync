@@ -1,0 +1,129 @@
+/* 保留原生选择、键盘和表单行为，统一所有选择器的外观。 */
+select {
+  --select-height: 42px;
+  --select-radius: 9px;
+  --select-font-size: 13px;
+  --select-background: var(--surface);
+  --select-border: var(--line-strong);
+  --select-padding-start: 12px;
+  --select-arrow: var(--control-arrow);
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: var(--select-height);
+  padding: 0 34px 0 var(--select-padding-start);
+  border: 1px solid var(--select-border);
+  border-radius: var(--select-radius);
+  background-color: var(--select-background);
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 14px;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: var(--select-font-size);
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 140ms, border-color 140ms, box-shadow 140ms;
+}
+select:hover:not(:disabled) { border-color: var(--accent-border); background-color: var(--surface-hover); }
+select:focus-visible, select:open { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-ring); }
+select:disabled { background-color: var(--surface-subtle); color: var(--muted); cursor: not-allowed; }
+
+.filter-select { position: relative; display: inline-flex; align-items: center; min-width: 125px; max-width: 200px; }
+.filter-select > svg { position: absolute; left: 11px; z-index: 1; pointer-events: none; color: var(--muted); }
+.filter-select select { --select-height: 36px; --select-font-size: 12px; --select-radius: 8px; }
+.filter-select:has(> svg) select { --select-padding-start: 32px; }
+.filter-select:focus-within > svg { color: var(--accent-deep); }
+
+.status-select { position: relative; display: inline-flex; align-items: center; width: 106px; max-width: 100%; height: 29px; border-radius: 7px; }
+.status-select > svg { position: absolute; left: 8px; pointer-events: none; z-index: 1; }
+.status-select select {
+  --select-height: 29px;
+  --select-radius: 7px;
+  --select-font-size: 12px;
+  --select-background: transparent;
+  --select-border: transparent;
+  --select-padding-start: 27px;
+  padding-inline-end: 23px;
+  background-position: right 7px center;
+  color: inherit;
+}
+.status-select select:hover:not(:disabled) { background-color: var(--surface-hover); border-color: var(--accent-border); }
+.status-select select:disabled { background-color: transparent; color: inherit; opacity: .7; }
+.card-top .status-select { width: 104px; }
+.report-scope > select { --select-height: 36px; min-width: 166px; width: auto; }
+
+/* 支持可定制原生选择器的浏览器同时美化展开面板；其余浏览器保留原生菜单。 */
+@supports (appearance:base-select) {
+  select, select::picker(select) { appearance: base-select; }
+  select { display: inline-flex; align-items: center; gap: 10px; padding-inline-end: 12px; background-image: none; }
+  select::picker-icon {
+    content: '';
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    margin-inline-start: auto;
+    background: var(--select-arrow) center / 14px no-repeat;
+    transition: rotate 140ms ease;
+  }
+  select:open::picker-icon { rotate: 180deg; }
+  .status-select select { gap: 5px; padding-inline-end: 7px; }
+  .status-select select::picker-icon { width: 12px; height: 12px; flex-basis: 12px; background-size: 12px; }
+  select::picker(select) {
+    min-inline-size: max(anchor-size(self-inline), 150px);
+    max-inline-size: min(340px, calc(100vw - 24px));
+    max-block-size: min(330px, calc(100dvh - 32px));
+    margin-block: 6px;
+    padding: 6px;
+    border: 1px solid var(--accent-border);
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--accent-deep);
+    box-shadow: 0 12px 30px var(--shadow), 0 3px 8px var(--shadow-soft);
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  select option {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 37px;
+    padding: 9px 11px;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--ink-soft);
+    font-size: 13px;
+    font-weight: 400;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms;
+  }
+  select option + option { margin-top: 2px; }
+  select option:checked { background: var(--accent-light); color: var(--accent-deep); font-weight: 550; }
+  select option:hover, select option:focus { outline: none; background: var(--accent-light); color: var(--accent-deep); }
+  select option:checked:hover, select option:checked:focus { background: var(--accent-light); }
+  select option:focus-visible { box-shadow: inset 0 0 0 1px var(--shadow-strong); }
+  select option::checkmark { content: '✓'; order: 1; margin-inline-start: auto; color: var(--accent-deep); font-size: 14px; }
+  select option:disabled { color: var(--muted); background: transparent; cursor: not-allowed; }
+  select optgroup { margin-top: 5px; padding: 8px 0 0; border-top: 1px solid var(--accent-border); color: var(--muted); font-size: 12px; font-weight: 500; }
+  select optgroup option { margin-top: 4px; }
+}
+
+@media (max-width: 600px) {
+  .filter-select { flex: 1 1 110px; min-width: 0; max-width: none; }
+  .filter-select select { --select-height: 34px; }
+  .report-scope > select { --select-height: 34px; --select-font-size: 12px; min-width: 0; width: 130px; }
+  .field select { --select-font-size: 14px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  select, select option, select::picker-icon { transition: none; }
+}

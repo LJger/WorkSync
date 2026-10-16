@@ -10,6 +10,26 @@ export function addDays(date: string, count: number): string {
   d.setUTCDate(d.getUTCDate() + count);
   return d.toISOString().slice(0, 10);
 }
+export function addMonths(date: string, count: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  const day = d.getUTCDate();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() + count + 1);
+  d.setUTCDate(0);
+  d.setUTCDate(Math.min(day, d.getUTCDate()));
+  return d.toISOString().slice(0, 10);
+}
+export interface DateRange { dueFrom: string; dueTo: string }
+export function calendarRange(period: 'today' | 'week' | 'month', today = localDate()): DateRange {
+  if (period === 'today') return { dueFrom: today, dueTo: today };
+  if (period === 'week') {
+    const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+    const dueFrom = addDays(today, -((weekday + 6) % 7));
+    return { dueFrom, dueTo: addDays(dueFrom, 6) };
+  }
+  const dueFrom = `${today.slice(0, 7)}-01`;
+  return { dueFrom, dueTo: addDays(addMonths(dueFrom, 1), -1) };
+}
 export function validDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value) &&
     !Number.isNaN(Date.parse(`${value}T00:00:00Z`)) &&

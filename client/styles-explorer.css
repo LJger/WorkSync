@@ -1,0 +1,59 @@
+.explorer-trigger { display: inline-flex; align-items: center; gap: 8px; padding: 7px 9px; border: 1px solid var(--accent-border); border-radius: 9px; background: var(--accent-light); color: var(--accent-deep); font-size: 12px; transition: background-color 160ms, border-color 160ms, box-shadow 160ms; }
+.explorer-trigger:hover { background: var(--accent-light); border-color: var(--accent-border); box-shadow: 0 3px 10px var(--shadow-soft); }
+.explorer-trigger > svg { transition: rotate 180ms; }
+.explorer-trigger:hover > svg { rotate: 18deg; }
+.explorer-trigger kbd { padding: 2px 4px; border: 1px solid var(--accent-border); border-radius: 4px; background: var(--surface); color: var(--muted); font: inherit; font-size: 10px; line-height: 1.25; }
+.explorer { --explorer-top: clamp(32px, 12dvh, 130px); position: fixed; top: var(--explorer-top); bottom: auto; left: 0; right: 0; margin: 0 auto; width: 610px; max-height: calc(100dvh - var(--explorer-top) - 20px); border-radius: 17px; border-color: var(--accent-border); box-shadow: 0 24px 80px var(--shadow-strong), 0 4px 18px var(--shadow-soft); }
+.explorer .modal-shell { max-height: calc(100dvh - var(--explorer-top) - 20px); }
+.explorer::backdrop { background: var(--scrim); backdrop-filter: blur(7px); }
+.explorer .modal-header { padding: 23px 25px 19px; border: 0; }
+.explorer .modal-header h2 { font-size: 20px; letter-spacing: -.3px; }
+.explorer .modal-header p { font-size: 12px; color: var(--muted); }
+.explorer-body { display: flex; flex-direction: column; padding: 0 17px 13px; min-height: 0; overflow: hidden; }
+.explorer-search { display: flex; flex-shrink: 0; align-items: center; gap: 11px; margin: 0 7px; padding: 0 13px; height: 47px; border: 1px solid var(--accent-border); border-radius: 10px; background: var(--accent-light); color: var(--accent-deep); box-shadow: 0 0 0 3px var(--focus-ring); }
+.explorer-search:focus-within { border-color: var(--accent-border); box-shadow: 0 0 0 3px var(--focus-ring); }
+.explorer-search input { flex: 1; width: 0; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-size: 13px; }
+.explorer-search input:focus { box-shadow: none; }
+.explorer-search input::placeholder { color: var(--muted); }
+.explorer-caption { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; margin: 20px 11px 9px; color: var(--muted); font-size: 11px; }
+.explorer-caption small { font-size: 11px; color: var(--muted); }
+.explorer-list { min-height: 0; max-height: min(420px, 47dvh); overflow-y: auto; padding: 2px 4px 5px; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.explorer-option { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 72px; padding: 11px 12px; margin: 2px 0; border: 1px solid transparent; border-radius: 11px; background: transparent; text-align: left; transition: background-color 140ms, border-color 140ms; }
+.explorer-option[aria-selected="true"] { background: var(--accent-light); border-color: var(--accent-border); }
+.explorer-icon { display: flex; align-items: center; justify-content: center; width: 39px; height: 39px; flex: 0 0 39px; border: 1px solid var(--accent-border); border-radius: 11px; box-shadow: inset 0 1px 0 var(--highlight); transition: transform 160ms; }
+.explorer-icon-teal { color: var(--accent-deep); background: var(--accent-light); border-color: var(--accent-border); }
+.explorer-icon-amber { color: var(--warning); background: var(--warning-bg); border-color: var(--warning-border); }
+.explorer-icon-blue { color: var(--ink-soft); background: var(--surface-subtle); border-color: var(--line); }
+.explorer-option[aria-selected="true"] .explorer-icon { transform: translateY(-1px); }
+.explorer-option-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 6px; }
+.explorer-option-copy strong { font-size: 13px; font-weight: 600; color: var(--accent-deep); }
+.explorer-option-copy small { font-size: 12px; color: var(--muted); line-height: 1.65; }
+.explorer-option-hint { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.explorer-option-arrow { color: var(--accent-deep); opacity: 0; transform: translateX(-4px); transition: transform 160ms, opacity 160ms; }
+.explorer-option[aria-selected="true"] .explorer-option-arrow { opacity: 1; transform: translateX(0); }
+.explorer-footer { display: flex; flex-shrink: 0; align-items: center; gap: 18px; padding: 13px 25px; border-top: 1px solid var(--accent-border); background: var(--surface-subtle); color: var(--muted); font-size: 11px; }
+.explorer-footer > span { display: inline-flex; align-items: center; gap: 4px; }
+.explorer-footer > span:last-child { margin-left: auto; }
+.explorer-footer kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 4px; border: 1px solid var(--accent-border); border-bottom-width: 2px; border-radius: 4px; background: var(--surface); color: var(--accent-deep); font: inherit; font-size: 10px; }
+.explorer-empty { display: flex; align-items: center; gap: 12px; flex-direction: column; padding: 30px 15px 43px; color: var(--accent-deep); }
+.explorer-empty strong { font-size: 14px; font-weight: 550; }
+.explorer-empty span { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 1000px) { .explorer-trigger kbd { display: none; } }
+@media (max-width: 600px) {
+  .explorer-trigger { justify-content: center; width: 33px; height: 33px; padding: 0; }
+  .explorer-trigger > span, .explorer-trigger kbd { display: none; }
+  .explorer .modal-header { padding: 21px 20px 18px; }
+  .explorer-body { padding: 0 10px 10px; }
+  .explorer-search { height: 44px; gap: 8px; padding: 0 10px; }
+  .explorer-search input { font-size: 13px; }
+  .explorer-option { gap: 10px; padding: 12px 9px; }
+  .explorer-option-hint { display: none; }
+  .explorer-option-copy small { font-size: 12px; }
+  .explorer-icon { width: 35px; height: 35px; flex-basis: 35px; border-radius: 10px; }
+  .explorer-footer { gap: 10px; padding: 12px 18px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .explorer-trigger, .explorer-trigger > svg, .explorer-option, .explorer-icon, .explorer-option-arrow { transition: none; }
+  .explorer-trigger:hover > svg, .explorer-option[aria-selected="true"] .explorer-icon { rotate: none; transform: none; }
+}

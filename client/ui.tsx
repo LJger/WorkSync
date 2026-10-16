@@ -1,5 +1,5 @@
 import { cloneElement, createContext, isValidElement, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { Check, CheckCircle2, Circle, CircleDot, Copy, Inbox, LoaderCircle, RefreshCw, TriangleAlert, X } from 'lucide-react';
+import { Bell, Check, CheckCircle2, Circle, CircleDot, Copy, Inbox, LoaderCircle, RefreshCw, TriangleAlert, X } from 'lucide-react';
 import type { Member, Task, TaskStatus } from '../shared/types';
 import { STATUS_LABELS } from '../shared/types';
 import { addDays, localDate } from '../shared/dates';
@@ -98,8 +98,10 @@ export function useDebounced<T>(value: T, delay = 250): T {
 }
 
 interface ConfirmOptions { title: string; message: string; label?: string; danger?: boolean }
+type ToastKind = 'success' | 'error' | 'info';
+interface ToastAction { label: string; onClick: () => void }
 interface UIContextValue {
-  toast: (message: string, kind?: 'success' | 'error') => void;
+  toast: (message: string, kind?: ToastKind, action?: ToastAction) => () => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
   copy: (text: string, title?: string) => Promise<boolean>;
 }
@@ -107,19 +109,27 @@ const UIContext = createContext<UIContextValue>(null!);
 export const useUI = () => useContext(UIContext);
 
 export function UIProvider({ children }: { children: ReactNode }) {
-  const [toasts, setToasts] = useState<{ id: number; message: string; kind: 'success' | 'error' }[]>([]);
+  const [toasts, setToasts] = useState<{ id: number; message: string; kind: ToastKind; action?: ToastAction }[]>([]);
   const nextId = useRef(0);
-  const timers = useRef<number[]>([]);
+  const timers = useRef(new Map<number, number>());
   const [confirmation, setConfirmation] = useState<(ConfirmOptions & { resolve: (value: boolean) => void }) | null>(null);
   const [copyFallback, setCopyFallback] = useState<{ title: string; text: string } | null>(null);
   const copyArea = useRef<HTMLTextAreaElement>(null);
-  const toast = useCallback((message: string, kind: 'success' | 'error' = 'success') => {
-    const id = ++nextId.current;
-    setToasts(current => [...current.slice(-3), { id, message, kind }]);
-    const timer = window.setTimeout(() => setToasts(current => current.filter(t => t.id !== id)), kind === 'error' ? 6500 : 3500);
-    timers.current.push(timer);
+  const dismissToast = useCallback((id: number) => {
+    setToasts(current => current.filter(item => item.id !== id));
+    window.clearTimeout(timers.current.get(id));
+    timers.current.delete(id);
   }, []);
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const toast = useCallback((message: string, kind: ToastKind = 'success', action?: ToastAction) => {
+    const id = ++nextId.current;
+    setToasts(current => [...current.slice(-3), { id, message, kind, action }]);
+    timers.current.set(id, window.setTimeout(() => dismissToast(id), kind === 'info' ? 8000 : kind === 'error' ? 6500 : 3500));
+    return () => dismissToast(id);
+  }, [dismissToast]);
+  useEffect(() => {
+    const activeTimers = timers.current;
+    return () => activeTimers.forEach(clearTimeout);
+  }, []);
   useEffect(() => { if (copyFallback) requestAnimationFrame(() => copyArea.current?.select()); }, [copyFallback]);
   const confirm = useCallback((options: ConfirmOptions) => new Promise<boolean>(resolve => {
     setConfirmation(previous => { previous?.resolve(false); return { ...options, resolve }; });
@@ -143,8 +153,9 @@ export function UIProvider({ children }: { children: ReactNode }) {
   return <UIContext.Provider value={{ toast, confirm, copy }}>
     {children}
     <div className="toast-stack" aria-live="polite">{toasts.map(item => <div className={`toast toast-${item.kind}`} key={item.id}>
-      {item.kind === 'success' ? <CheckCircle2 size={18} /> : <TriangleAlert size={18} />}<span>{item.message}</span>
-      <IconButton label="关闭提示" onClick={() => setToasts(current => current.filter(t => t.id !== item.id))}><X size={15} /></IconButton>
+      {item.kind === 'success' ? <CheckCircle2 size={18} /> : item.kind === 'info' ? <Bell size={18} /> : <TriangleAlert size={18} />}<span>{item.message}</span>
+      {item.action && <button type="button" className="toast-action" onClick={() => { dismissToast(item.id); item.action!.onClick(); }}>{item.action.label}</button>}
+      <IconButton label="关闭提示" onClick={() => dismissToast(item.id)}><X size={15} /></IconButton>
     </div>)}</div>
     {confirmation && <Modal title={confirmation.title} onClose={() => closeConfirm(false)} className="confirm-modal">
       <div className="modal-body"><p className="confirm-message">{confirmation.message}</p></div><footer className="modal-footer"><Button onClick={() => closeConfirm(false)}>取消</Button>

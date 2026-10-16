@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ChevronDown, ChevronUp, Copy, FolderOpen, Folders, Globe2, Pencil, Pin, Plus, Search, Settings2, Trash2, X } from 'lucide-react';
 import type { Category, Page, SharedInfo } from '../shared/types';
 import { formatDateTime } from '../shared/dates';
@@ -15,12 +15,19 @@ export function SharedPage() {
   const [search, setSearch] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [editing, setEditing] = useState<SharedInfo | 'new' | null>(null);
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    if (params.get('compose') !== '1') return;
+    setEditing('new');
+    const next = new URLSearchParams(params); next.delete('compose');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
   const q = useDebounced(search);
   const categories = useQuery({ queryKey: ['categories'], queryFn: () => api<{ items: Category[] }>('/shared-categories'), refetchInterval: 30_000 });
   const query = useInfiniteQuery({ queryKey: ['shared', { q, categoryId }], initialPageParam: 1,
     queryFn: ({ pageParam, signal }) => api<Page<SharedInfo>>(`/shared-info${queryString({ q, categoryId, page: pageParam, pageSize: 20 })}`, { signal }),
     getNextPageParam: page => page.page * page.pageSize < page.total ? page.page + 1 : undefined, refetchInterval: 30_000 });
-  const refresh = () => Promise.all(['shared', 'categories'].map(key => client.invalidateQueries({ queryKey: [key] })));
+  const refresh = () => Promise.all(['shared', 'shared-info', 'categories', 'notifications'].map(key => client.invalidateQueries({ queryKey: [key] })));
   const pin = useMutation({ mutationFn: (info: SharedInfo) => api(`/shared-info/${info.id}/pin`, { method: 'POST', body: { pinned: !info.pinned, version: info.version } }),
     onSuccess: (_, info) => { toast(info.pinned ? '已取消置顶' : '信息已置顶'); void refresh(); }, onError: error => { toast(errorMessage(error), 'error'); void refresh(); } });
   const remove = useMutation({ mutationFn: (info: SharedInfo) => api(`/shared-info/${info.id}`, { method: 'DELETE', body: { version: info.version } }),
@@ -29,6 +36,8 @@ export function SharedPage() {
     if (await confirm({ title: '删除这条共享信息？', message: `「${info.title}」将从共享区移除，其他成员也将无法查看。`, label: '删除信息', danger: true })) remove.mutate(info);
   };
   const items = query.data?.pages.flatMap(page => page.items) || [];
+  const selectedInfo = params.get('info');
+  const closeInfo = () => setParams(previous => { const next = new URLSearchParams(previous); next.delete('info'); return next; });
   const selectedName = categoryId === 'uncategorized' ? '未分类' : categories.data?.items.find(c => c.id === categoryId)?.name || '全部信息';
   return <>
     <PageHeader title="团队共享" description="常用的信息放在一起，需要时随手找到。"><Button variant="primary" onClick={() => setEditing('new')}><Plus size={18} />发布信息</Button></PageHeader>
@@ -49,7 +58,26 @@ export function SharedPage() {
     </section></div>
     {editing && <SharedEditor initial={editing === 'new' ? undefined : editing} categoryId={categoryId && categoryId !== 'uncategorized' ? categoryId : null} categories={categories.data?.items || []}
       onClose={() => setEditing(null)} onSaved={() => { void refresh(); setEditing(null); }} />}
+    {selectedInfo && !editing && <SharedDetail id={selectedInfo} onClose={closeInfo} />}
   </>;
+}
+
+function SharedDetail({ id, onClose }: { id: string; onClose: () => void }) {
+  const { copy } = useUI();
+  const query = useQuery({ queryKey: ['shared-info', id], queryFn: ({ signal }) => api<{ info: SharedInfo }>(`/shared-info/${encodeURIComponent(id)}`, { signal }),
+    refetchInterval: 30_000, retry: (count, error) => count < 1 && !(error instanceof ApiError && error.status === 404) });
+  const missing = query.error instanceof ApiError && query.error.status === 404;
+  const info = query.data?.info;
+  return <Modal title={missing ? '共享信息已删除' : info?.title || '共享信息'} className="shared-detail" onClose={onClose}>
+    <div className="modal-body">
+      {query.isPending ? <Loading /> : missing ? <EmptyState title="这条共享信息已删除" description="可以返回团队共享，查看其他信息。" icon={<FolderOpen size={28} />} /> : query.isError ?
+        <ErrorPanel error={query.error} retry={() => void query.refetch()} /> : info && <>
+          <div className="shared-detail-meta"><Avatar member={info.author} small /><span>{info.author.displayName} 发布</span><span>{formatDateTime(info.createdAt)}</span><span className="category-chip">{info.categoryName || '未分类'}</span></div>
+          <div className="shared-content"><TextLinks text={info.content} /></div>
+        </>}
+    </div>
+    <footer className="modal-footer"><Button onClick={onClose}>返回共享列表</Button>{info && !query.isError && <Button variant="primary" onClick={() => void copy(info.content, '复制共享内容')}><Copy size={15} />复制内容</Button>}</footer>
+  </Modal>;
 }
 
 function SharedCard({ info, canEdit, admin, edit, pin, remove, pending }: { info: SharedInfo; canEdit: boolean; admin: boolean; edit: () => void; pin: () => void; remove: () => void; pending: boolean }) {
@@ -86,7 +114,7 @@ function SharedEditor({ initial, categoryId, categories, onClose, onSaved }: { i
       const body = { title, content, categoryId: selectedCategory || null };
       if (original) await api(`/shared-info/${original.id}`, { method: 'PATCH', body: { ...body, version: original.version } });
       else await api('/shared-info', { method: 'POST', body });
-      toast(original ? '共享信息已更新' : '信息已发布，团队成员均可查看'); onSaved();
+      toast(original ? '共享信息已更新' : '信息已发布，已通知团队成员'); onSaved();
     } catch (e) { setError(e); } finally { setBusy(false); }
   }
   async function reload() {

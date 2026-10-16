@@ -19,10 +19,10 @@ export async function seedDevelopment(db: Db, now = new Date()) {
   const zhou = store.createUser({ username: 'zhou', displayName: '周予安', role: 'member', passwordHash: hash, mustChangePassword: false });
   const create = (title: string, assignee: User, creator: User, due: number | null, status: TaskStatus, description: string, offset = -3) => {
     time = new Date(`${addDays(today, offset - 2)}T09:20:00+08:00`);
-    let task = store.createTask(creator, { title, description, assigneeId: assignee.id, dueDate: due === null ? null : addDays(today, due) });
+    let task = store.createTask(creator, { title, description, assigneeIds: [assignee.id], dueDate: due === null ? null : addDays(today, due) });
     if (status !== 'todo') {
       time = new Date(`${addDays(today, offset)}T10:40:00+08:00`);
-      task = store.updateTask(assignee, task.id, { version: task.version, status });
+      task = store.updateTask(creator, task.id, { version: task.version, status });
     }
     return task;
   };

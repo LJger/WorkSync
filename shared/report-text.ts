@@ -8,6 +8,7 @@ export function reportText(report: MonthlyReport): string {
   const end = report.current ? `${formatDateTime(report.asOf)}（上海时间）` : `${localDate(new Date(new Date(report.asOf).getTime() - 1))} 日末`;
   const lines = [title, ...(report.member ? [`成员：${report.member.displayName}`] : []), `统计截至：${end}`,
     `已完成 ${report.totals.completed} 项；未完成 ${report.totals.open} 项，其中逾期 ${report.totals.overdue} 项。`];
+  if (report.scope === 'team') lines.push('共同任务计入各负责人的记录，团队总数按任务去重。');
   const item = (task: Task, index: number, done: boolean) => {
     const meta = done ? `完成于 ${localDate(task.completedAt!)}` : `${STATUS_LABELS[task.status]}${task.dueDate ? `，截止 ${task.dueDate}` : '，未设截止日期'}${task.overdue ? '，已逾期' : ''}`;
     return [`${index + 1}. ${task.title}（${meta}）`, ...(task.description ? task.description.split('\n').map(line => `   ${line}`) : [])].join('\n');

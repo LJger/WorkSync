@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 export type Db = Database.Database;
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 3;
 
 export function openDatabase(filename: string): Db {
   if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
@@ -16,7 +16,21 @@ export function openDatabase(filename: string): Db {
     db.close();
     throw new Error('数据库版本较新，请使用匹配的应用版本。');
   }
-  if (version === 0) db.transaction(() => {
+  try {
+    if (version === 0) initializeDatabase(db);
+    if (version < 2) migrateNotifications(db);
+    if (version < 3) migrateTaskAssignees(db);
+    return db;
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+}
+
+// Keep the original schema as the first migration, so new and existing databases
+// follow exactly the same upgrade path.
+function initializeDatabase(db: Db): void {
+  db.transaction(() => {
     db.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
@@ -93,5 +107,53 @@ export function openDatabase(filename: string): Db {
       PRAGMA user_version = 1;
     `);
   })();
-  return db;
+}
+
+function migrateNotifications(db: Db): void {
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE notifications_v2 (
+        id TEXT PRIMARY KEY,
+        recipient_id TEXT NOT NULL REFERENCES users(id),
+        task_id TEXT REFERENCES tasks(id),
+        shared_info_id TEXT REFERENCES shared_info(id) ON DELETE CASCADE,
+        kind TEXT NOT NULL CHECK (kind IN ('assigned', 'due_soon', 'overdue', 'shared_published')),
+        message TEXT NOT NULL,
+        due_date TEXT,
+        dedupe_key TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        read_at TEXT,
+        dismissed_at TEXT,
+        CHECK (
+          (kind = 'shared_published' AND shared_info_id IS NOT NULL AND task_id IS NULL) OR
+          (kind != 'shared_published' AND task_id IS NOT NULL AND shared_info_id IS NULL)
+        )
+      );
+      INSERT INTO notifications_v2 (id, recipient_id, task_id, kind, message, due_date, dedupe_key, created_at, read_at, dismissed_at)
+        SELECT id, recipient_id, task_id, kind, message, due_date, dedupe_key, created_at, read_at, dismissed_at FROM notifications;
+      DROP TABLE notifications;
+      ALTER TABLE notifications_v2 RENAME TO notifications;
+      CREATE INDEX notifications_recipient ON notifications(recipient_id, dismissed_at, created_at);
+      CREATE INDEX notifications_shared_info ON notifications(shared_info_id);
+      PRAGMA user_version = 2;
+    `);
+  })();
+}
+
+function migrateTaskAssignees(db: Db): void {
+  db.transaction(() => {
+    db.exec(`
+      CREATE TABLE task_assignees (
+        task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        PRIMARY KEY (task_id, user_id)
+      );
+      INSERT INTO task_assignees (task_id, user_id) SELECT id, assignee_id FROM tasks;
+      CREATE INDEX task_assignees_user ON task_assignees(user_id, task_id);
+      DROP INDEX tasks_assignee;
+      ALTER TABLE tasks DROP COLUMN assignee_id;
+      CREATE INDEX tasks_state_due ON tasks(archived_at, status, due_date);
+      PRAGMA user_version = 3;
+    `);
+  })();
 }

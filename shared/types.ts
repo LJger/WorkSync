@@ -22,9 +22,9 @@ export interface Task {
   title: string;
   description: string;
   creatorId: string;
-  assigneeId: string;
+  assigneeIds: string[];
   creator: Member;
-  assignee: Member;
+  assignees: Member[];
   status: TaskStatus;
   dueDate: string | null;
   completedAt: string | null;
@@ -37,10 +37,13 @@ export interface Task {
 export interface TaskInput {
   title: string;
   description?: string;
-  assigneeId: string;
+  assigneeIds: string[];
   dueDate?: string | null;
 }
 export type TaskPatch = Partial<TaskInput> & { version: number; status?: TaskStatus };
+export function canEditTask(user: Pick<User, 'id' | 'role'>, task: Pick<Task, 'creatorId'>): boolean {
+  return user.role === 'admin' || task.creatorId === user.id;
+}
 export interface Page<T> { items: T[]; total: number; page: number; pageSize: number }
 export interface TaskSummary {
   total: number;
@@ -50,15 +53,18 @@ export interface TaskSummary {
   overdue: number;
   dueToday: number;
 }
-export interface Notification {
+export type TaskNotificationKind = 'assigned' | 'due_soon' | 'overdue';
+interface NotificationBase {
   id: string;
-  taskId: string;
-  kind: 'assigned' | 'due_soon' | 'overdue';
   title: string;
   message: string;
   createdAt: string;
   readAt: string | null;
 }
+export type Notification = NotificationBase & (
+  { kind: TaskNotificationKind; taskId: string; sharedInfoId: null } |
+  { kind: 'shared_published'; taskId: null; sharedInfoId: string }
+);
 export interface Category { id: string; name: string; count: number }
 export interface SharedInfo {
   id: string;

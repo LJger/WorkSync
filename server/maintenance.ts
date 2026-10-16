@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { copyFile, mkdir, rename, rm, readFile, access } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { SCHEMA_VERSION } from './database.js';
+import { openDatabase, SCHEMA_VERSION } from './database.js';
 
 export async function assertServiceStopped(directory: string): Promise<void> {
   let pid: number;
@@ -19,7 +19,8 @@ export async function restoreDatabase(source: string, destination: string): Prom
   const validation = new Database(source, { readonly: true, fileMustExist: true });
   try {
     if (validation.pragma('quick_check', { simple: true }) !== 'ok') throw new Error('备份完整性检查未通过。');
-    if (validation.pragma('user_version', { simple: true }) !== SCHEMA_VERSION) throw new Error('备份版本与当前应用不匹配。');
+    const version = validation.pragma('user_version', { simple: true }) as number;
+    if (version < 1 || version > SCHEMA_VERSION) throw new Error('备份版本与当前应用不匹配。');
     validation.prepare('SELECT id FROM users LIMIT 1').get();
     validation.prepare('SELECT payload FROM task_snapshots LIMIT 1').get();
   } finally { validation.close(); }
@@ -28,9 +29,14 @@ export async function restoreDatabase(source: string, destination: string): Prom
   let previousBackup: string | null = null;
   try {
     await copyFile(source, temporary);
-    // 恢复后的会话一律失效，避免重新启用备份中的旧登录凭据。
-    const restored = new Database(temporary);
-    try { restored.prepare('DELETE FROM sessions').run(); restored.pragma('wal_checkpoint(TRUNCATE)'); }
+    // 先在临时副本升级旧备份；失败时不改变原备份和当前数据库。
+    const restored = openDatabase(temporary);
+    try {
+      if ((restored.pragma('foreign_key_check') as unknown[]).length) throw new Error('备份中的关联数据不完整。');
+      // 恢复后的会话一律失效，避免重新启用备份中的旧登录凭据。
+      restored.prepare('DELETE FROM sessions').run();
+      restored.pragma('wal_checkpoint(TRUNCATE)');
+    }
     finally { restored.close(); }
     let exists = false;
     try { await access(destination); exists = true; } catch { /* 首次恢复 */ }

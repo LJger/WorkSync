@@ -1,21 +1,44 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
-import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, useDraggable, useDroppable, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { DndContext, DragOverlay, KeyboardSensor, PointerSensor, TouchSensor, pointerWithin, useDraggable, useDroppable, useSensor, useSensors, type CollisionDetection, type DragEndEvent, type KeyboardCoordinateGetter } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, CalendarDays, Check, ChevronDown, CircleCheck, GripVertical, KanbanSquare, LayoutList, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { Archive, ArchiveRestore, ArrowDown, ArrowUpRight, Check, CircleCheck, GripVertical, KanbanSquare, LayoutList, LoaderCircle, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import type { Member, Page, Task, TaskInput, TaskScope, TaskStatus, TaskSummary } from '../shared/types';
 import { STATUS_LABELS } from '../shared/types';
 import { formatDateTime, localDate } from '../shared/dates';
 import { api, ApiError, errorMessage, queryString } from './api';
 import { useAuth } from './auth';
+import { TaskDateFilter, dateFilterQuery, type DateFilterQuery, type DateFilterValue } from './TaskDateFilter';
 import { Avatar, Button, DueDate, EmptyState, ErrorPanel, Field, FormError, IconButton, Loading, Modal, PageHeader, StatusBadge, StatusIcon, StatusSelect, useDebounced, useUI } from './ui';
 
 export async function invalidateWork(client: QueryClient) {
   await Promise.all(['tasks', 'task', 'reports', 'notifications', 'users'].map(key => client.invalidateQueries({ queryKey: [key] })));
 }
-type Filters = { scope: TaskScope; q: string; status?: TaskStatus; due: string; archived: boolean; assigneeId: string };
+type Filters = { scope: TaskScope; q: string; status?: TaskStatus; archived: boolean; assigneeId: string } & DateFilterQuery;
 const statuses: TaskStatus[] = ['todo', 'in_progress', 'done'];
+const archiveTarget = 'task-archive';
+// A large card overlapping a small archive button must not archive it accidentally.
+const boardCollision: CollisionDetection = args => pointerWithin({ ...args, pointerCoordinates: args.pointerCoordinates ?? {
+  x: args.collisionRect.left + args.collisionRect.width / 2, y: args.collisionRect.top + args.collisionRect.height / 2,
+} });
+const boardKeyboardCoordinates: KeyboardCoordinateGetter = (event, { currentCoordinates, context }) => {
+  const { active, collisionRect, over, droppableContainers, droppableRects } = context;
+  if (!collisionRect) return;
+  const task = active?.data.current?.task as Task | undefined;
+  const column = statuses.includes(over?.id as TaskStatus) ? over!.id as TaskStatus : task?.status;
+  const index = column ? statuses.indexOf(column) : 0;
+  const target = event.code === 'ArrowUp' ? archiveTarget : event.code === 'ArrowDown' ? column
+    : event.code === 'ArrowLeft' ? statuses[index - 1] : event.code === 'ArrowRight' ? statuses[index + 1] : undefined;
+  if (!target || droppableContainers.get(target)?.disabled) return;
+  const rect = droppableRects.get(target);
+  if (!rect) return;
+  event.preventDefault();
+  return {
+    x: currentCoordinates.x + rect.left + rect.width / 2 - collisionRect.left - collisionRect.width / 2,
+    y: currentCoordinates.y + rect.top + Math.min(80, rect.height / 2) - collisionRect.top - collisionRect.height / 2,
+  };
+};
 
 function useTasks(filters: Filters, enabled: boolean, board = false) {
   return useInfiniteQuery({
@@ -30,6 +53,7 @@ export function TasksPage() {
   const { user } = useAuth();
   const { toast } = useUI();
   const client = useQueryClient();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const rawScope = params.get('scope');
   const scope: TaskScope = rawScope === 'created' ? 'created' : rawScope === 'all' && user!.role === 'admin' ? 'all' : 'assigned';
@@ -38,11 +62,15 @@ export function TasksPage() {
   });
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<TaskStatus | ''>('');
-  const [due, setDue] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilterValue>({ kind: 'all' });
   const [assigneeId, setAssigneeId] = useState('');
   const [archived, setArchived] = useState(false);
   const [move, setMove] = useState<Task | null>(null);
   const [dragging, setDragging] = useState<Task | null>(null);
+  const [archiveDrop, setArchiveDrop] = useState(false);
+  const mutationLock = useRef(false);
+  const archiveButton = useRef<HTMLButtonElement>(null);
+  const archiveViaKeyboard = useRef(false);
   const [reducedMotion, setReducedMotion] = useState(window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -51,7 +79,8 @@ export function TasksPage() {
     return () => media.removeEventListener('change', update);
   }, []);
   const q = useDebounced(search);
-  const filters: Filters = { scope, q, status: status || undefined, due, archived, assigneeId };
+  const dateQuery = dateFilterQuery(dateFilter);
+  const filters: Filters = { scope, q, status: status || undefined, ...dateQuery, archived, assigneeId };
   const list = useTasks(filters, view === 'list');
   const summary = useQuery({ queryKey: ['tasks', 'summary', { ...filters, status: undefined }],
     queryFn: ({ signal }) => api<TaskSummary>(`/tasks/summary${queryString({ ...filters, status: undefined })}`, { signal }), refetchInterval: 30_000 });
@@ -63,23 +92,47 @@ export function TasksPage() {
     onMutate: ({ task, target }) => setMove({ ...task, status: target, overdue: target !== 'done' && !!task.dueDate && task.dueDate < localDate() }),
     onSuccess: (_, { target }) => toast(target === 'done' ? '任务已完成，月度总结会自动记录' : `已切换为${STATUS_LABELS[target]}`),
     onError: error => toast(errorMessage(error), 'error'),
-    onSettled: async () => { await invalidateWork(client); setMove(null); },
+    onSettled: async () => { try { await invalidateWork(client); } finally { setMove(null); mutationLock.current = false; } },
   });
+  const archiveTask = useMutation({
+    mutationFn: (task: Task) => api<{ task: Task }>(`/tasks/${task.id}/archive`, { method: 'POST', body: { archived: true, version: task.version } }),
+    onSuccess: () => { toast('任务已归档，可在归档中恢复'); },
+    onError: error => { toast(errorMessage(error), 'error'); },
+    onSettled: async () => { try { await invalidateWork(client); } finally { mutationLock.current = false; } },
+  });
+  useEffect(() => {
+    if (!archiveTask.isPending && archiveTask.isSuccess && archiveViaKeyboard.current) {
+      archiveViaKeyboard.current = false;
+      archiveButton.current?.focus({ preventScroll: true });
+    }
+  }, [archiveTask.isPending, archiveTask.isSuccess]);
+  const busy = changeStatus.isPending || archiveTask.isPending;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 7 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }), useSensor(KeyboardSensor));
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 6 } }), useSensor(KeyboardSensor, { coordinateGetter: boardKeyboardCoordinates }));
   const open = (id: string) => setParams(previous => { const next = new URLSearchParams(previous); next.set('task', id); return next; });
   const close = () => setParams(previous => { const next = new URLSearchParams(previous); next.delete('task'); return next; });
   const switchScope = (value: TaskScope) => { setAssigneeId(''); setParams(previous => { const next = new URLSearchParams(previous); next.set('scope', value); return next; }); };
   const switchView = (value: 'list' | 'board') => { setView(value); try { localStorage.setItem(`worksync:view:${user!.id}`, value); } catch { /* 不可持久化时仍可切换 */ } };
-  const onStatus = (task: Task, target: TaskStatus) => { if (target !== task.status && !changeStatus.isPending) changeStatus.mutate({ task, target }); };
+  const onStatus = (task: Task, target: TaskStatus) => {
+    if (task.archivedAt || target === task.status || mutationLock.current) return;
+    mutationLock.current = true; changeStatus.mutate({ task, target });
+  };
   const onDragEnd = (event: DragEndEvent) => {
     setDragging(null);
-    const target = event.over?.id as TaskStatus | undefined;
+    const target = event.over?.id;
+    setArchiveDrop(target === archiveTarget);
     const task = event.active.data.current?.task as Task | undefined;
-    if (task && target && statuses.includes(target)) onStatus(task, target);
+    if (!task || task.archivedAt || archived || view !== 'board' || mutationLock.current) return;
+    if (target === archiveTarget) {
+      archiveViaKeyboard.current = event.activatorEvent instanceof KeyboardEvent;
+      mutationLock.current = true; archiveTask.mutate(task);
+    } else if (statuses.includes(target as TaskStatus)) {
+      onStatus(task, target as TaskStatus);
+    }
   };
-  const hasFilters = !!q || !!status || !!due || !!assigneeId || archived;
-  const clearFilters = () => { setSearch(''); setStatus(''); setDue(''); setAssigneeId(''); setArchived(false); };
+  const toggleDate = (preset: 'today' | 'overdue') => setDateFilter(dateFilter.kind === 'preset' && dateFilter.preset === preset ? { kind: 'all' } : { kind: 'preset', preset });
+  const hasFilters = !!q || !!status || dateFilter.kind !== 'all' || !!assigneeId || archived;
+  const clearFilters = () => { setSearch(''); setStatus(''); setDateFilter({ kind: 'all' }); setAssigneeId(''); setArchived(false); };
   const tasks = list.data?.pages.flatMap(page => page.items) || [];
   const count = summary.data;
   const selectedTask = params.get('task');
@@ -92,11 +145,19 @@ export function TasksPage() {
 
     <section className="task-overview" aria-label="任务概览">
       <div className="overview-item overview-active"><span className="overview-label">进行中</span><strong>{count?.inProgress ?? '—'}</strong><span className="overview-unit">项正在推进</span></div>
-      <button className={`overview-item overview-today ${due === 'today' ? 'is-selected' : ''}`} onClick={() => setDue(due === 'today' ? '' : 'today')} aria-label="筛选今天截止的任务"><span className="overview-label">今天截止</span><strong>{count?.dueToday ?? '—'}</strong><ArrowUpRight size={16} /></button>
-      <button className={`overview-item overview-late ${due === 'overdue' ? 'is-selected' : ''}`} onClick={() => setDue(due === 'overdue' ? '' : 'overdue')} aria-label="筛选逾期任务"><span className="overview-label">需要跟进</span><strong>{count?.overdue ?? '—'}</strong><span className="overview-unit">项已逾期</span><ArrowUpRight size={16} /></button>
-      <div className="overview-note"><CircleCheck size={18} /><span>完成一件事，<br />月度记录就多一笔。</span></div>
+      <button className={`overview-item overview-today ${dateQuery.due === 'today' ? 'is-selected' : ''}`} onClick={() => toggleDate('today')} aria-label="筛选今天截止的任务"><span className="overview-label">今天截止</span><strong>{count?.dueToday ?? '—'}</strong><ArrowUpRight size={16} /></button>
+      <button className={`overview-item overview-late ${dateQuery.due === 'overdue' ? 'is-selected' : ''}`} onClick={() => toggleDate('overdue')} aria-label="筛选逾期任务"><span className="overview-label">需要跟进</span><strong>{count?.overdue ?? '—'}</strong><span className="overview-unit">项已逾期</span><ArrowUpRight size={16} /></button>
+      <button className="overview-note" onClick={() => navigate('/reports')}><CircleCheck size={20} /><span><strong>回顾本月</strong>看看已完成的工作</span><ArrowUpRight size={15} /></button>
     </section>
 
+    <DndContext sensors={sensors} collisionDetection={boardCollision} onDragStart={event => { setArchiveDrop(false); setDragging(event.active.data.current?.task as Task); }} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
+      accessibility={{ screenReaderInstructions: { draggable: '按空格键拿起任务，左右方向键切换状态列，上键移至归档，下键返回任务列。空格键放下，Escape 取消；放到归档会立即归档。' },
+        announcements: {
+          onDragStart: ({ active }) => `已拿起任务「${active.data.current?.task.title}」。`,
+          onDragOver: ({ over }) => over?.id === archiveTarget ? '已移至归档区域，松手归档。' : over ? `已移至${STATUS_LABELS[over.id as TaskStatus]}列。` : '已离开可放置区域。',
+          onDragEnd: ({ over }) => over?.id === archiveTarget ? '正在归档任务。' : over ? `已放到${STATUS_LABELS[over.id as TaskStatus]}列。` : '未移动任务。',
+          onDragCancel: () => '已取消拖动。',
+        } }}>
     <section className="tasks-workspace">
       <div className="workspace-topline"><div className="scope-tabs" aria-label="任务范围">
         <button className={scope === 'assigned' ? 'active' : ''} onClick={() => switchScope('assigned')}>我负责的</button>
@@ -107,10 +168,10 @@ export function TasksPage() {
       <div className="task-toolbar"><div className="search-field"><Search size={17} /><input aria-label="搜索任务" placeholder="搜索任务标题或说明…" value={search} onChange={e => setSearch(e.target.value)} />
         {search && <IconButton label="清空搜索" onClick={() => setSearch('')}><X size={14} /></IconButton>}</div>
         <div className="filter-controls">
-          {view === 'list' && <label className="filter-select"><SlidersHorizontal size={14} /><select aria-label="按状态筛选" value={status} onChange={e => setStatus(e.target.value as TaskStatus | '')}><option value="">全部状态</option>{statuses.map(s => <option value={s} key={s}>{STATUS_LABELS[s]}</option>)}</select><ChevronDown size={13} /></label>}
-          <label className="filter-select"><CalendarDays size={14} /><select aria-label="按截止日期筛选" value={due} onChange={e => setDue(e.target.value)}><option value="">全部日期</option><option value="today">今天截止</option><option value="upcoming">未来 7 天</option><option value="overdue">已逾期</option><option value="none">无截止日期</option></select><ChevronDown size={13} /></label>
-          {scope !== 'assigned' && <label className="filter-select"><select aria-label="按负责人筛选" value={assigneeId} onChange={e => setAssigneeId(e.target.value)}><option value="">全部负责人</option>{members.data?.items.map(m => <option value={m.id} key={m.id}>{m.displayName}</option>)}</select><ChevronDown size={13} /></label>}
-          <button className={`archive-toggle ${archived ? 'active' : ''}`} title="查看归档任务" aria-label="查看归档任务" aria-pressed={archived} onClick={() => setArchived(!archived)}><Archive size={16} /><span>归档</span></button>
+          {view === 'list' && <label className="filter-select"><SlidersHorizontal size={14} /><select aria-label="按状态筛选" value={status} onChange={e => setStatus(e.target.value as TaskStatus | '')}><option value="">全部状态</option>{statuses.map(s => <option value={s} key={s}>{STATUS_LABELS[s]}</option>)}</select></label>}
+          <TaskDateFilter value={dateFilter} onChange={setDateFilter} />
+          {scope !== 'assigned' && <label className="filter-select"><select aria-label="按负责人筛选" value={assigneeId} onChange={e => setAssigneeId(e.target.value)}><option value="">全部负责人</option>{members.data?.items.map(m => <option value={m.id} key={m.id}>{m.displayName}</option>)}</select></label>}
+          <ArchiveDropTarget buttonRef={archiveButton} archived={archived} enabled={view === 'board' && !archived && !busy} dragging={!!dragging} pending={archiveTask.isPending} onToggle={() => setArchived(!archived)} />
         </div>
       </div>
       {archived && <div className="archive-banner"><Archive size={15} />正在查看归档任务，历史记录仍然保留。<button onClick={() => setArchived(false)}>返回当前任务</button></div>}
@@ -121,24 +182,34 @@ export function TasksPage() {
           </EmptyState> : <div className="task-table" role="table" aria-label="任务列表">
             <div className="task-table-head" role="row"><span role="columnheader">任务</span><span role="columnheader">状态</span><span role="columnheader">负责人</span><span role="columnheader">截止日期</span><span /></div>
             {tasks.map(original => { const task = move?.id === original.id ? move : original; return <div className={`task-row ${task.status === 'done' ? 'task-done' : ''} ${task.overdue ? 'task-late' : ''}`} role="row" key={task.id}>
-              <div className="task-name-cell" role="cell"><button className={`complete-button ${task.status === 'done' ? 'completed' : ''}`} aria-label={task.status === 'done' ? `重新打开「${task.title}」` : `完成「${task.title}」`} disabled={!!task.archivedAt || changeStatus.isPending}
+              <div className="task-name-cell" role="cell"><button className={`complete-button ${task.status === 'done' ? 'completed' : ''}`} aria-label={task.status === 'done' ? `重新打开「${task.title}」` : `完成「${task.title}」`} disabled={!!task.archivedAt || busy}
                 onClick={() => onStatus(original, task.status === 'done' ? 'todo' : 'done')}>{task.status === 'done' && <Check size={13} />}</button>
                 <button className="task-title-button" onClick={() => open(task.id)}><span>{task.title}</span>{task.description && <small>{task.description.split('\n')[0]}</small>}</button></div>
-              <div role="cell" className="task-status-cell"><StatusSelect task={task} disabled={changeStatus.isPending} onChange={next => onStatus(original, next)} /></div>
+              <div role="cell" className="task-status-cell"><StatusSelect task={task} disabled={busy} onChange={next => onStatus(original, next)} /></div>
               <div role="cell" className="assignee-cell"><Avatar member={task.assignee} small /><span>{task.assignee.displayName}</span></div>
               <div role="cell" className="task-date-cell"><DueDate task={task} /></div>
               <div role="cell" className="task-open-cell"><IconButton label={`查看「${task.title}」`} onClick={() => open(task.id)}><ArrowUpRight size={16} /></IconButton></div>
             </div>; })}
             <footer className="task-table-footer"><span>已显示 {tasks.length} / {list.data?.pages[0].total || 0} 项任务</span>{list.hasNextPage ? <Button variant="ghost" loading={list.isFetchingNextPage} onClick={() => void list.fetchNextPage()}><ArrowDown size={14} />加载更多</Button> : <span className="muted">状态更新后自动保存</span>}</footer>
           </div>}
-      </> : <DndContext sensors={sensors} onDragStart={event => setDragging(event.active.data.current?.task as Task)} onDragEnd={onDragEnd} onDragCancel={() => setDragging(null)}
-        accessibility={{ screenReaderInstructions: { draggable: '按空格键拿起任务，使用方向键移动，空格键放下，Escape 取消。也可以直接使用卡片上的状态菜单。' } }}>
-        <div className="kanban-board">{statuses.map(column => <BoardColumn key={column} status={column} filters={{ ...filters, status: column }} move={move} open={open} changeStatus={onStatus} disabled={changeStatus.isPending} />)}</div>
-        <DragOverlay dropAnimation={reducedMotion ? null : { duration: 160, easing: 'ease-out' }}>{dragging && <div className="drag-preview"><StatusBadge status={dragging.status} /><strong>{dragging.title}</strong><DueDate task={dragging} /></div>}</DragOverlay>
-      </DndContext>}
+      </> : <div className="kanban-board">{statuses.map(column => <BoardColumn key={column} status={column} filters={{ ...filters, status: column }} move={move} open={open} changeStatus={onStatus} disabled={busy} />)}</div>}
+      <DragOverlay style={{ pointerEvents: 'none' }} dropAnimation={reducedMotion || archiveDrop ? null : { duration: 160, easing: 'ease-out' }}>{dragging && <div className="drag-preview" aria-hidden="true"><StatusBadge status={dragging.status} /><strong>{dragging.title}</strong><DueDate task={dragging} /></div>}</DragOverlay>
     </section>
+    </DndContext>
     {selectedTask && <TaskDrawer id={selectedTask} onClose={close} />}
   </>;
+}
+
+function ArchiveDropTarget({ buttonRef, archived, enabled, dragging, pending, onToggle }: { buttonRef: RefObject<HTMLButtonElement | null>; archived: boolean; enabled: boolean; dragging: boolean; pending: boolean; onToggle: () => void }) {
+  const { setNodeRef, isOver } = useDroppable({ id: archiveTarget, disabled: !enabled });
+  const setRef = useCallback((node: HTMLButtonElement | null) => { setNodeRef(node); buttonRef.current = node; }, [setNodeRef, buttonRef]);
+  return <div className="archive-control">
+    <button type="button" ref={setRef} className={`archive-toggle ${archived ? 'active' : ''} ${dragging && enabled ? 'drop-ready' : ''} ${isOver ? 'drop-active' : ''}`}
+      title="查看归档任务；看板任务可拖到这里归档" aria-label="查看归档任务" aria-pressed={archived} aria-busy={pending} disabled={pending} onClick={() => { if (!dragging) onToggle(); }}>
+      {pending ? <LoaderCircle size={16} className="spin" /> : <Archive size={16} />}<span>{pending ? '归档中' : '归档'}</span>
+    </button>
+    {dragging && enabled && <span className={`archive-drop-hint ${isOver ? 'is-over' : ''}`} aria-hidden="true">{isOver ? '松手归档' : '拖到这里归档'}</span>}
+  </div>;
 }
 
 function BoardColumn({ status, filters, move, open, changeStatus, disabled }: { status: TaskStatus; filters: Filters; move: Task | null; open: (id: string) => void; changeStatus: (task: Task, target: TaskStatus) => void; disabled: boolean }) {
@@ -158,10 +229,10 @@ function BoardColumn({ status, filters, move, open, changeStatus, disabled }: { 
   </section>;
 }
 function BoardCard({ task, open, changeStatus, disabled }: { task: Task; open: (id: string) => void; changeStatus: (task: Task, target: TaskStatus) => void; disabled: boolean }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: task.id, data: { task }, disabled: disabled || !!task.archivedAt });
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } = useDraggable({ id: task.id, data: { task }, disabled: disabled || !!task.archivedAt });
   return <article className={`board-card ${isDragging ? 'dragging' : ''} ${task.overdue ? 'card-overdue' : ''}`} ref={setNodeRef} style={{ transform: CSS.Translate.toString(transform) }}>
     <div className="card-top"><StatusSelect task={task} disabled={disabled} onChange={target => changeStatus(task, target)} />
-      {!task.archivedAt && <button className="drag-handle" {...attributes} {...listeners} aria-label={`拖动「${task.title}」`} title="拖动以切换状态"><GripVertical size={16} /></button>}</div>
+      {!task.archivedAt && <button ref={setActivatorNodeRef} className="drag-handle" {...attributes} {...listeners} disabled={disabled} aria-label={`拖动「${task.title}」`} title="拖动以切换状态或归档"><GripVertical size={16} /></button>}</div>
     <button className="card-title" onClick={() => open(task.id)}>{task.title}</button>
     {task.description && <p className="card-description">{task.description}</p>}
     <footer className="card-footer"><DueDate task={task} /><span className="card-assignee" title={task.assignee.displayName}><Avatar member={task.assignee} small /></span></footer>
